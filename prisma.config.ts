@@ -11,6 +11,10 @@ export default defineConfig({
   },
   engine: "classic",
   datasource: {
-    url: env("DATABASE_URL"),
+    // Migrations/CLI must use the direct (session-mode, 5432) connection.
+    // The pgBouncer transaction pooler (DATABASE_URL, 6543) can't take the
+    // session-level advisory locks that `migrate deploy` needs and will hang.
+    // The runtime PrismaClient still uses DATABASE_URL from schema.prisma.
+    url: env("DIRECT_URL"),
   },
 });
