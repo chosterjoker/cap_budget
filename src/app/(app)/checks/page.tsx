@@ -40,7 +40,7 @@ export default async function ChecksPage() {
         <div>
           <h2 className="text-2xl font-bold">Check Register</h2>
           <p className="text-muted-foreground">
-            Checks, wire transfers, and credit card payments
+            Checks, wire transfers, and other payments
           </p>
         </div>
         <a
