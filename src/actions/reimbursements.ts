@@ -37,6 +37,12 @@ export async function createReimbursement(formData: FormData) {
   const eventId = (formData.get("eventId") as string) || undefined;
   const tags = (formData.get("tags") as string) || undefined;
   const notes = (formData.get("notes") as string) || undefined;
+
+  // A reimbursement is a budget spend, so it must be tagged to a category to
+  // count toward "Total Spent" and show up in the grid.
+  if (!categoryId) {
+    throw new Error("Select a budget category for this reimbursement.");
+  }
   const receipt = formData.get("receipt") as File | null;
   // The client may have already scanned the receipt (interactive pre-fill);
   // reuse that to avoid a second OCR call and the hosted-URL round trip.
@@ -97,6 +103,11 @@ export async function updateReimbursement(
   const isTreasurer = session.user.role === "TREASURER";
   if (!isOwner && !isTreasurer) throw new Error("Forbidden");
   if (data.status && !isTreasurer) throw new Error("Only treasurer can change status");
+
+  // Don't let an edit strip the required category off an existing reimbursement.
+  if (data.categoryId !== undefined && !data.categoryId) {
+    throw new Error("Select a budget category for this reimbursement.");
+  }
 
   await prisma.reimbursement.update({
     where: { id },

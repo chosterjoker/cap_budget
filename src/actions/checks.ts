@@ -24,6 +24,14 @@ export async function createCheck(data: {
 
   const isSettlement = Boolean(data.reimbursementIds?.length);
 
+  // Every spend must be tagged to a budget category so it lands in the grid and
+  // counts toward "Total Spent". Settlement checks are exempt because the
+  // reimbursements they pay each carry their own (required) category, and
+  // carryover checks are previous-semester spend tracked for cash only.
+  if (!isSettlement && !data.isCarryover && !data.categoryId) {
+    throw new Error("Select a budget category for this payment.");
+  }
+
   const check = await prisma.check.create({
     data: {
       semesterId: data.semesterId,
@@ -93,6 +101,16 @@ export async function updateCheck(
   });
   if (!existing) throw new Error("Check not found");
 
+  // Mirror createCheck: a non-settlement, non-carryover check must keep a
+  // category so it stays in the budget grid. `categoryId === undefined` means
+  // the caller left it unchanged, so fall back to the existing value.
+  const isSettlement = existing.reimbursements.length > 0;
+  const resultingCategoryId =
+    data.categoryId !== undefined ? data.categoryId : existing.categoryId;
+  if (!isSettlement && !existing.isCarryover && !resultingCategoryId) {
+    throw new Error("Select a budget category for this payment.");
+  }
+
   const updated = await prisma.check.update({
     where: { id },
     data: {
@@ -112,7 +130,6 @@ export async function updateCheck(
   // Keep the auto-created budget expense in sync so "spent" reflects edits.
   // Settlement checks (those paying out reimbursements) and carryover checks
   // (previous-semester spend, cash-only) never own an expense.
-  const isSettlement = existing.reimbursements.length > 0;
   if (!isSettlement && !updated.isCarryover) {
     const linked = existing.expenses[0];
     if (updated.categoryId) {

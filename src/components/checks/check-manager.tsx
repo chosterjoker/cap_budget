@@ -192,6 +192,10 @@ export function CheckManager({
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const reimbursementIds = fd.getAll("reimbursementIds") as string[];
+    if (!reimbursementIds.length && !fd.get("categoryId")) {
+      toast.error("Select a budget category for this payment.");
+      return;
+    }
     try {
       await createCheck({
         semesterId,
@@ -210,8 +214,8 @@ export function CheckManager({
       toast.success("Check created");
       setCreateOpen(false);
       router.refresh();
-    } catch {
-      toast.error("Failed to create check");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create check");
     }
   }
 
@@ -239,8 +243,8 @@ export function CheckManager({
       toast.success("Saved");
       setEditing(null);
       router.refresh();
-    } catch {
-      toast.error("Failed to save");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
     }
   }
 
@@ -573,14 +577,15 @@ function CheckForm({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Category</Label>
+          <Label>Category {!settling && <span className="text-destructive">*</span>}</Label>
           <Select
             name="categoryId"
+            required={!settling}
             defaultValue={defaults?.categoryId ?? undefined}
             items={Object.fromEntries(categories.map((c) => [c.id, c.name]))}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Optional" />
+              <SelectValue placeholder={settling ? "From reimbursements" : "Select a category"} />
             </SelectTrigger>
             <SelectContent>
               {categories.map((c) => (

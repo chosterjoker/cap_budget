@@ -200,13 +200,17 @@ export function ReimbursementManager({
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.set("semesterId", semesterId);
+    if (!fd.get("categoryId")) {
+      toast.error("Select a budget category for this reimbursement.");
+      return;
+    }
     try {
       await createReimbursement(fd);
       toast.success("Reimbursement submitted");
       setCreateOpen(false);
       router.refresh();
-    } catch {
-      toast.error("Failed to submit");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit");
     }
   }
 
@@ -214,6 +218,10 @@ export function ReimbursementManager({
     e.preventDefault();
     if (!editing) return;
     const fd = new FormData(e.currentTarget);
+    if (!fd.get("categoryId")) {
+      toast.error("Select a budget category for this reimbursement.");
+      return;
+    }
     try {
       await updateReimbursement(editing.id, {
         name: fd.get("name") as string,
@@ -637,13 +645,14 @@ function CreateReimbursementForm({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Category</Label>
+          <Label>Category <span className="text-destructive">*</span></Label>
           <Select
             name="categoryId"
+            required
             items={Object.fromEntries(categories.map((c) => [c.id, c.name]))}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Optional" />
+              <SelectValue placeholder="Select a category" />
             </SelectTrigger>
             <SelectContent>
               {categories.map((c) => (
@@ -724,14 +733,15 @@ function EditReimbursementForm({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Category</Label>
+          <Label>Category <span className="text-destructive">*</span></Label>
           <Select
             name="categoryId"
+            required
             defaultValue={defaults.categoryId ?? undefined}
             items={Object.fromEntries(categories.map((c) => [c.id, c.name]))}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Optional" />
+              <SelectValue placeholder="Select a category" />
             </SelectTrigger>
             <SelectContent>
               {categories.map((c) => (
