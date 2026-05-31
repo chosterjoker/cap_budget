@@ -25,23 +25,31 @@ export async function getBudgetGridData(semesterId: string) {
     }),
   ]);
 
+  // `cellMap` powers the per-week grid columns; `categoryTotals` tracks the
+  // full spend per category. We keep them separate because check-created
+  // expenses (and reimbursements that don't fall inside a defined week) have no
+  // weekId — they belong to a category's total even though no week column owns
+  // them, so summing the columns alone would silently drop that spend.
   const cellMap = new Map<string, number>();
+  const categoryTotals = new Map<string, number>();
+  const bump = (categoryId: string, weekId: string | null, amount: number) => {
+    const key = `${categoryId}:${weekId ?? "none"}`;
+    cellMap.set(key, (cellMap.get(key) ?? 0) + amount);
+    categoryTotals.set(categoryId, (categoryTotals.get(categoryId) ?? 0) + amount);
+  };
   for (const e of expenses) {
-    const key = `${e.categoryId}:${e.weekId ?? "none"}`;
-    cellMap.set(key, (cellMap.get(key) ?? 0) + e.amount);
+    bump(e.categoryId, e.weekId, e.amount);
   }
   for (const r of reimbursements) {
     if (!r.categoryId) continue;
-    const weekId = findWeekForDate(r.date, weeks);
-    const key = `${r.categoryId}:${weekId ?? "none"}`;
-    cellMap.set(key, (cellMap.get(key) ?? 0) + r.amount);
+    bump(r.categoryId, findWeekForDate(r.date, weeks), r.amount);
   }
 
   const rows = categories.map((cat) => {
     const weekAmounts = weeks.map((w) => {
       return cellMap.get(`${cat.id}:${w.id}`) ?? 0;
     });
-    const spent = weekAmounts.reduce((a, b) => a + b, 0);
+    const spent = categoryTotals.get(cat.id) ?? 0;
     const remaining = cat.allocatedAmount - spent;
     const percentRemaining =
       cat.allocatedAmount > 0
