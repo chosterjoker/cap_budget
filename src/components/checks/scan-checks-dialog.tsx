@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { scanChecks, createChecks } from "@/actions/checks";
 import { todayInput } from "@/lib/format";
+import { downscaleImage } from "@/lib/image";
 import type { ParsedCheck } from "@/lib/ocr";
 import type { PaymentMethod } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -116,12 +117,15 @@ export function ScanChecksDialog({
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const original = e.target.files?.[0];
     e.target.value = ""; // allow re-picking the same file after a failed read
-    if (!file) return;
+    if (!original) return;
     setError(null);
     setPhase("scanning");
     try {
+      // Shrink before upload — Vercel caps request bodies at ~4.5MB and OpenAI
+      // rejects images over ~20MB, so a raw phone photo would fail outright.
+      const file = await downscaleImage(original);
       const fd = new FormData();
       fd.append("image", file);
       const parsed = await scanChecks(fd);

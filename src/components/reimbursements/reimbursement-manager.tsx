@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
+import { downscaleImage } from "@/lib/image";
 import {
   createReimbursement,
   updateReimbursement,
@@ -539,13 +540,25 @@ function CreateReimbursementForm({
   const [fileName, setFileName] = useState<string | null>(null);
 
   async function handleReceipt(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const original = e.target.files?.[0];
     setParsedData("");
-    setFileName(file?.name ?? null);
-    if (!file) {
+    if (!original) {
+      setFileName(null);
       setScan("idle");
       return;
     }
+    // Shrink big phone photos before they leave the browser — Vercel caps
+    // request bodies at ~4.5MB and OpenAI rejects images over ~20MB. Swap the
+    // downscaled file back into the input so the *stored* receipt is small too.
+    const file = await downscaleImage(original);
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      e.target.files = dt.files;
+    } catch {
+      // DataTransfer unsupported — submit falls back to the original file.
+    }
+    setFileName(original.name);
     if (!ocrEnabled || !file.type.startsWith("image/")) {
       setScan("idle");
       return;

@@ -68,7 +68,14 @@ async function callVision(
       }),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(
+        `[ocr] OpenAI ${model} HTTP ${res.status}: ${await res
+          .text()
+          .catch(() => "<no body>")}`
+      );
+      return null;
+    }
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content as string | undefined;
     if (!content) return null;
@@ -76,7 +83,8 @@ async function callVision(
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     return JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-  } catch {
+  } catch (err) {
+    console.error("[ocr] vision request failed:", err);
     return null;
   }
 }
