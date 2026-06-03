@@ -12,8 +12,10 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Allow larger receipt uploads (default is 1MB).
-      bodySizeLimit: "10mb",
+      // Headroom for raw phone photos (default is 1MB). Note: the scan flows
+      // downscale images in the browser before upload (see src/lib/image.ts), so
+      // the payload that actually crosses the wire is ~1-2MB regardless.
+      bodySizeLimit: "100mb",
     },
   },
 };
