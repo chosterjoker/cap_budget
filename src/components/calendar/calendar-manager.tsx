@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import {
   importSocialCalendarCsv,
   createEvent,
@@ -400,7 +400,7 @@ export function CalendarManager({
               onSubmit={handleUpdate}
               defaults={{
                 name: editing.name,
-                date: editing.date.toISOString().slice(0, 10),
+                date: toDateInput(editing.date),
                 time: editing.time ?? "",
                 eventType: editing.eventType ?? "",
                 audience: editing.audience ?? "",
@@ -441,7 +441,7 @@ function EventForm({
             name="date"
             type="date"
             required
-            defaultValue={defaults?.date ?? new Date().toISOString().slice(0, 10)}
+            defaultValue={defaults?.date ?? todayInput()}
           />
         </div>
         <div className="space-y-2">

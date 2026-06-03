@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { createVenmoIncome, updateVenmoIncome, deleteVenmoIncome } from "@/actions/venmo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,7 +133,7 @@ export function VenmoManager({
                 <Input
                   name="date"
                   type="date"
-                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  defaultValue={todayInput()}
                   required
                 />
               </div>
@@ -252,7 +252,7 @@ export function VenmoManager({
                     name="date"
                     type="date"
                     required
-                    defaultValue={new Date(editing.date).toISOString().slice(0, 10)}
+                    defaultValue={toDateInput(editing.date)}
                   />
                 </div>
               </div>

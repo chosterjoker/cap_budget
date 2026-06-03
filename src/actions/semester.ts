@@ -26,82 +26,90 @@ export async function createSemester(data: {
 }) {
   await requireTreasurer();
 
-  await prisma.semester.updateMany({
-    where: { isActive: true },
-    data: { isActive: false },
-  });
+  // Atomic: deactivating the old semester and creating the new one (plus its
+  // carried-over checks, cloned categories, and weeks) must all commit together.
+  // A partial failure could otherwise leave *no* active semester, breaking the
+  // app for every user until fixed by hand.
+  const semester = await prisma.$transaction(async (tx) => {
+    await tx.semester.updateMany({
+      where: { isActive: true },
+      data: { isActive: false },
+    });
 
-  const previous = await prisma.semester.findFirst({
-    where: { isActive: false },
-    orderBy: { createdAt: "desc" },
-    include: {
-      categories: true,
-      weeks: true,
-      // Checks still outstanding (uncleared) at transition time can still be
-      // drawn from the bank, so they carry forward into the new semester.
-      checks: { where: { cleared: false } },
-    },
-  });
+    const previous = await tx.semester.findFirst({
+      where: { isActive: false },
+      orderBy: { createdAt: "desc" },
+      include: {
+        categories: true,
+        weeks: true,
+        // Checks still outstanding (uncleared) at transition time can still be
+        // drawn from the bank, so they carry forward into the new semester.
+        checks: { where: { cleared: false } },
+      },
+    });
 
-  const semester = await prisma.semester.create({
-    data: {
-      name: data.name,
-      startDate: new Date(data.startDate),
-      endDate: data.endDate ? new Date(data.endDate) : null,
-      totalBudget: data.totalBudget,
-      openingBankBalance: data.openingBankBalance ?? 0,
-      openingUndeposited: data.openingUndeposited ?? 0,
-      isActive: true,
-      previousSemesterId: previous?.id,
-    },
-  });
+    const created = await tx.semester.create({
+      data: {
+        name: data.name,
+        startDate: new Date(data.startDate),
+        endDate: data.endDate ? new Date(data.endDate) : null,
+        totalBudget: data.totalBudget,
+        openingBankBalance: data.openingBankBalance ?? 0,
+        openingUndeposited: data.openingUndeposited ?? 0,
+        isActive: true,
+        previousSemesterId: previous?.id,
+      },
+    });
 
-  // Carry forward outstanding checks as cash-only rows. `isCarryover` keeps them
-  // out of this semester's budget grid (they were last semester's spend) while
-  // still drawing down the computed bank balance until manually cleared.
-  if (previous?.checks.length) {
-    await prisma.check.createMany({
-      data: previous.checks.map((c) => ({
-        semesterId: semester.id,
-        checkNumber: c.checkNumber,
-        description: c.description,
-        amount: c.amount,
-        date: c.date,
-        recipientName: c.recipientName,
-        paymentMethod: c.paymentMethod,
-        cleared: false,
-        isCarryover: true,
-        memo: c.memo,
+    // Carry forward outstanding checks as cash-only rows. `isCarryover` keeps them
+    // out of this semester's budget grid (they were last semester's spend) while
+    // still drawing down the computed bank balance until manually cleared.
+    if (previous?.checks.length) {
+      await tx.check.createMany({
+        data: previous.checks.map((c) => ({
+          semesterId: created.id,
+          checkNumber: c.checkNumber,
+          description: c.description,
+          amount: c.amount,
+          date: c.date,
+          recipientName: c.recipientName,
+          paymentMethod: c.paymentMethod,
+          cleared: false,
+          isCarryover: true,
+          memo: c.memo,
+        })),
+      });
+    }
+
+    if (data.cloneFromPrevious && previous) {
+      await tx.budgetCategory.createMany({
+        data: previous.categories.map((c) => ({
+          semesterId: created.id,
+          name: c.name,
+          allocatedAmount: c.allocatedAmount,
+          sortOrder: c.sortOrder,
+        })),
+      });
+    }
+
+    const cloneLabels = data.cloneFromPrevious
+      ? previous?.weeks.sort((a, b) => a.weekNumber - b.weekNumber).map((w) => w.label) ?? []
+      : [];
+    const weeks = generateWeeks(
+      new Date(data.startDate),
+      data.endDate ? new Date(data.endDate) : null,
+      { labels: cloneLabels }
+    );
+    await tx.week.createMany({
+      data: weeks.map((w) => ({
+        semesterId: created.id,
+        weekNumber: w.weekNumber,
+        startDate: w.startDate,
+        label: w.label,
       })),
     });
-  }
 
-  if (data.cloneFromPrevious && previous) {
-    await prisma.budgetCategory.createMany({
-      data: previous.categories.map((c) => ({
-        semesterId: semester.id,
-        name: c.name,
-        allocatedAmount: c.allocatedAmount,
-        sortOrder: c.sortOrder,
-      })),
-    });
-  }
-
-  const cloneLabels = data.cloneFromPrevious
-    ? previous?.weeks.sort((a, b) => a.weekNumber - b.weekNumber).map((w) => w.label) ?? []
-    : [];
-  const weeks = generateWeeks(
-    new Date(data.startDate),
-    data.endDate ? new Date(data.endDate) : null,
-    { labels: cloneLabels }
-  );
-  await prisma.week.createMany({
-    data: weeks.map((w) => ({
-      semesterId: semester.id,
-      weekNumber: w.weekNumber,
-      startDate: w.startDate,
-      label: w.label,
-    })),
+    return created;
   });
 
   revalidatePath("/");

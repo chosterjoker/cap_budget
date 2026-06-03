@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency, formatPercent, todayInput } from "@/lib/format";
 import { createExpense } from "@/actions/expenses";
 import { Button } from "@/components/ui/button";
 import {
@@ -191,7 +191,7 @@ export function BudgetGrid({
                     <Input
                       name="date"
                       type="date"
-                      defaultValue={new Date().toISOString().slice(0, 10)}
+                      defaultValue={todayInput()}
                       required
                     />
                   </div>

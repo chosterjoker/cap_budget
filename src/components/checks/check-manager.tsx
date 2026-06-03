@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { createCheck, updateCheck, deleteCheck } from "@/actions/checks";
+import { ScanChecksDialog } from "@/components/checks/scan-checks-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,6 +84,7 @@ export function CheckManager({
   events,
   reimbursements,
   isTreasurer,
+  ocrEnabled,
 }: {
   semesterId: string;
   checks: CheckRow[];
@@ -90,6 +92,7 @@ export function CheckManager({
   events: EventOption[];
   reimbursements: Reimbursement[];
   isTreasurer: boolean;
+  ocrEnabled: boolean;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -340,6 +343,13 @@ export function CheckManager({
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               Clear filters
             </Button>
+            {isTreasurer && ocrEnabled && (
+              <ScanChecksDialog
+                semesterId={semesterId}
+                categories={categories}
+                events={events}
+              />
+            )}
             {isTreasurer && (
               <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                 <DialogTrigger render={<Button size="sm">New check / payment</Button>} />
@@ -567,11 +577,7 @@ function CheckForm({
             name="date"
             type="date"
             required
-            defaultValue={
-              defaults?.date
-                ? new Date(defaults.date).toISOString().slice(0, 10)
-                : new Date().toISOString().slice(0, 10)
-            }
+            defaultValue={defaults?.date ? toDateInput(defaults.date) : todayInput()}
           />
         </div>
       </div>

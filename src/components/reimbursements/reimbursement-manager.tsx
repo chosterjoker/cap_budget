@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import {
   createReimbursement,
   updateReimbursement,
@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import Image from "next/image";
-import { ArrowDown, ArrowUp, ArrowUpDown, Sparkles, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Sparkles, Loader2, Upload, Check } from "lucide-react";
 
 type Reimbursement = {
   id: string;
@@ -259,7 +259,7 @@ export function ReimbursementManager({
         checkNumber: `R-${Date.now().toString().slice(-6)}`,
         description: `Reimbursement — ${officer?.name || officer?.email}`,
         amount: total,
-        date: new Date().toISOString().slice(0, 10),
+        date: todayInput(),
         recipientName: officer?.name || officer?.email || "Officer",
         paymentMethod: "CHECK",
         reimbursementIds: pending.map((r) => r.id),
@@ -533,13 +533,15 @@ function CreateReimbursementForm({
 }) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayInput());
   const [parsedData, setParsedData] = useState("");
   const [scan, setScan] = useState<ScanState>("idle");
+  const [fileName, setFileName] = useState<string | null>(null);
 
   async function handleReceipt(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     setParsedData("");
+    setFileName(file?.name ?? null);
     if (!file) {
       setScan("idle");
       return;
@@ -582,12 +584,45 @@ function CreateReimbursementForm({
             </span>
           )}
         </Label>
-        <Input
+        <input
+          id="receipt-upload"
           name="receipt"
           type="file"
           accept="image/*"
           onChange={handleReceipt}
+          className="sr-only"
         />
+        <label
+          htmlFor="receipt-upload"
+          className={`flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-3 text-sm transition-colors hover:bg-muted/50 ${
+            fileName ? "border-emerald-500/50 bg-emerald-500/5" : "border-input"
+          }`}
+        >
+          <span
+            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${
+              fileName ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {scan === "scanning" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : fileName ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">
+              {fileName ?? "Choose receipt image"}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {fileName ? "Click to replace" : "Upload a photo or scan of your receipt"}
+            </span>
+          </span>
+          <span className="shrink-0 rounded-md border bg-background px-2.5 py-1 text-xs font-medium">
+            Browse
+          </span>
+        </label>
         <input type="hidden" name="parsedData" value={parsedData} />
         {scan === "scanning" && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -727,7 +762,7 @@ function EditReimbursementForm({
             name="date"
             type="date"
             required
-            defaultValue={new Date(defaults.date).toISOString().slice(0, 10)}
+            defaultValue={toDateInput(defaults.date)}
           />
         </div>
       </div>

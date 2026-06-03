@@ -32,7 +32,7 @@ Living doc for the non-obvious parts. Keep terse — code is the source of truth
 1. `Expense` rows (`weekId` is explicit on the row)
 2. `Reimbursement` rows where `categoryId` is set (week is computed from `date` via `findWeekForDate`, which Sunday-aligns then matches the Week with the same Sunday)
 
-All reimbursement statuses count, including PENDING — the rationale is "you'll eventually cut a check, so plan around it now."
+All reimbursement statuses count, including PENDING — the rationale is "you'll eventually cut a check, so plan around it now." Separately, `getDashboardStats` surfaces *unsettled* reimbursements (`status != PAID`, i.e. PENDING **and** APPROVED) as `pendingReimbursements` — a cash-obligation readout only; it is **not** subtracted from any balance, so it never double-counts against the grid.
 
 **No-double-count invariant** — enforced in `src/actions/checks.ts::createCheck`:
 - `isSettlement = data.reimbursementIds.length > 0`
@@ -40,6 +40,8 @@ All reimbursement statuses count, including PENDING — the rationale is "you'll
 - If not settlement: write an Expense if `categoryId` is set (vendor payment).
 
 The Expense for a vendor payment lives forever; the reimbursement-side spend is the Reimbursement row itself. Either way, the budget grid sums each unit of spend exactly once.
+
+**Multi-step writes are transactional.** `createCheck` / `updateCheck` (check + its mirrored Expense or settlement) and `createSemester` (deactivate-old + create-new + carry checks + clone categories + weeks) each run inside a single `prisma.$transaction`. The grid reads `Expense`, not `Check`, so a check committed *without* its Expense would silently under-count spend — the transaction makes that impossible. Likewise a half-finished `createSemester` could leave *no* active semester. If you add another write that touches two+ tables, wrap it the same way.
 
 Per-event spend lives in `getEventSpending(semesterId)` — same idea, grouped by `eventId` instead of `(categoryId, weekId)`.
 
@@ -60,6 +62,28 @@ Known-type detection (`Club Night`, `WW Movie Night`, etc.) is by prefix match o
 - Three Google fonts loaded in `src/app/layout.tsx`: Inter (`--font-sans`), Bricolage Grotesque (`--font-heading`), JetBrains Mono (`--font-mono`).
 - The `font-heading` utility is applied globally to `h1–h4` via `globals.css @layer base`.
 - If you change a font, also update the corresponding CSS var name in `globals.css @theme inline`.
+
+## Dates are calendar-only (UTC convention)
+
+Every user-entered date (check date, expense date, reimbursement date, deposit/venmo/event date, week/semester start) is a **calendar date** — no time-of-day meaning — but the Prisma column is `DateTime`. To avoid timezone drift we treat these as date-only by **convention**:
+
+- **Store** at UTC midnight. `new Date("2026-06-02")` already yields `2026-06-02T00:00:00Z`; server actions pass the `YYYY-MM-DD` string straight in.
+- **Display** in UTC. `formatDate` (`src/lib/format.ts`) sets `timeZone: "UTC"`. Formatting in local time renders UTC-midnight as the *previous day* for anyone west of UTC (i.e. all our East-Coast users — the bug always showed).
+- **Input defaults** use the helpers in `format.ts`: `todayInput()` = the viewer's *local* today (so an evening entry doesn't pre-fill tomorrow); `toDateInput(date)` = the UTC `YYYY-MM-DD` for an existing value (edit forms round-trip exactly).
+
+**Sharp edge:** the convention only holds if all date rendering goes through `formatDate` / `toDateInput`. A stray `.toLocaleDateString()` or a CSV export that formats in local time reintroduces the off-by-one. (This is *not* fixed by switching the column to `@db.Date` — Prisma still hydrates that as a UTC-midnight JS `Date`, so the same UTC-display rule applies; `@db.Date` would only add a table-rewrite migration.)
+
+Week bucketing (`previousSunday` / `findWeekForDate` in `src/lib/weeks.ts`) compares two UTC-midnight dates through the same local transform, so it stays consistent regardless of runtime zone — leave it alone.
+
+## Database security (Supabase RLS)
+
+Supabase publishes the whole `public` schema over its Data API (PostgREST) to the project-wide `anon` key, which is effectively public. **This app never uses that API for tables** — all table access is Prisma (as the `postgres` owner role), and `@supabase/supabase-js` is used only for Storage (receipt uploads) with the service-role key. Both bypass RLS.
+
+So the fix for the Security Advisor's `rls_disabled_in_public` / `sensitive_columns_exposed` warnings is **RLS enabled on every `public` table with no policies** = deny-by-default for the API roles, full access for Prisma:
+
+- Migration `prisma/migrations/20260602120000_enable_rls_public_tables/` loops over `public` tables and `ENABLE ROW LEVEL SECURITY`. Apply with `npx prisma migrate deploy` (uses `DIRECT_URL`).
+- **ENABLE, not FORCE** — the owner role (`postgres`, used by Prisma) is exempt from non-forced RLS, so migrations and queries keep working. FORCE would lock Prisma out too.
+- **Maintenance:** RLS is per-table and not tracked in `schema.prisma`. When you add a new model, add `ALTER TABLE public."NewModel" ENABLE ROW LEVEL SECURITY;` to its migration, or it'll trip the advisor again.
 
 ## Things that bite
 - Base-UI's `Select` `onValueChange` can emit `null` (when the user clears) — typed setters need a wrapper: `(v) => set(v ?? "all")`.
