@@ -60,7 +60,7 @@ export default async function ChecksPage() {
           id: r.id,
           name: r.name,
           amount: r.amount,
-          officerName: r.officer.name ?? r.officer.email,
+          memberName: r.memberName ?? r.officer.name ?? r.officer.email,
         }))}
         isTreasurer={session?.user.role === "TREASURER"}
         ocrEnabled={isOcrEnabled()}

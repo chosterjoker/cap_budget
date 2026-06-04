@@ -55,7 +55,7 @@ type CheckRow = {
 
 type Category = { id: string; name: string };
 type EventOption = { id: string; name: string; date: Date };
-type Reimbursement = { id: string; name: string; amount: number; officerName: string };
+type Reimbursement = { id: string; name: string; amount: number; memberName: string };
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   CHECK: "Check",
@@ -546,7 +546,7 @@ function CheckForm({
                         )
                       }
                     />
-                    {r.name} · {r.officerName}
+                    {r.name} · {r.memberName}
                   </span>
                   <span className="font-mono">{formatCurrency(r.amount)}</span>
                 </label>
