@@ -44,6 +44,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Sparkles, Loader2, Upload, Check } fro
 type Reimbursement = {
   id: string;
   name: string;
+  memberName: string | null;
   amount: number;
   date: Date;
   status: string;
@@ -64,12 +65,19 @@ type EventOption = { id: string; name: string };
 
 type SortKey =
   | "name"
+  | "member"
   | "officer"
   | "category"
   | "event"
   | "date"
   | "amount"
   | "status";
+
+// Who the reimbursement is paid to. Older rows predate the member field, so
+// fall back to the submitting officer.
+function payeeOf(r: { memberName: string | null; officer: Officer }) {
+  return r.memberName?.trim() || r.officer.name || r.officer.email;
+}
 
 export function ReimbursementManager({
   semesterId,
@@ -78,6 +86,7 @@ export function ReimbursementManager({
   categories,
   events,
   currentUserId,
+  currentUserName,
   isTreasurer,
   ocrEnabled,
 }: {
@@ -87,6 +96,7 @@ export function ReimbursementManager({
   categories: Category[];
   events: EventOption[];
   currentUserId: string;
+  currentUserName: string;
   isTreasurer: boolean;
   ocrEnabled: boolean;
 }) {
@@ -108,7 +118,7 @@ export function ReimbursementManager({
     const since = sinceDate ? new Date(sinceDate).getTime() : null;
     return reimbursements.filter((r) => {
       if (q) {
-        const hay = `${r.name} ${r.officer.name ?? ""} ${r.officer.email} ${r.tags ?? ""} ${r.notes ?? ""}`.toLowerCase();
+        const hay = `${r.name} ${payeeOf(r)} ${r.officer.name ?? ""} ${r.officer.email} ${r.tags ?? ""} ${r.notes ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       const ts = new Date(r.date).getTime();
@@ -131,6 +141,8 @@ export function ReimbursementManager({
             return r.amount;
           case "date":
             return new Date(r.date).getTime();
+          case "member":
+            return payeeOf(r);
           case "officer":
             return r.officer.name ?? r.officer.email;
           case "category":
@@ -226,6 +238,8 @@ export function ReimbursementManager({
     try {
       await updateReimbursement(editing.id, {
         name: fd.get("name") as string,
+        memberName:
+          ((fd.get("memberName") as string) || "").trim() || payeeOf(editing),
         amount: parseFloat(fd.get("amount") as string),
         date: fd.get("date") as string,
         categoryId: ((fd.get("categoryId") as string) || null) as string | null,
@@ -244,24 +258,23 @@ export function ReimbursementManager({
     }
   }
 
-  async function bundleToCheck(officerId: string) {
+  async function bundleToCheck(payee: string) {
     const pending = reimbursements.filter(
-      (r) => r.officer.id === officerId && r.status === "APPROVED"
+      (r) => payeeOf(r) === payee && r.status === "APPROVED"
     );
     if (!pending.length) {
-      toast.error("No approved reimbursements for this officer");
+      toast.error("No approved reimbursements for this member");
       return;
     }
     const total = pending.reduce((s, r) => s + r.amount, 0);
-    const officer = officers.find((o) => o.id === officerId);
     try {
       await createCheck({
         semesterId,
         checkNumber: `R-${Date.now().toString().slice(-6)}`,
-        description: `Reimbursement — ${officer?.name || officer?.email}`,
+        description: `Reimbursement — ${payee}`,
         amount: total,
         date: todayInput(),
-        recipientName: officer?.name || officer?.email || "Officer",
+        recipientName: payee,
         paymentMethod: "CHECK",
         reimbursementIds: pending.map((r) => r.id),
       });
@@ -380,6 +393,7 @@ export function ReimbursementManager({
                   onSubmit={handleCreate}
                   categories={categories}
                   events={events}
+                  currentUserName={currentUserName}
                   ocrEnabled={ocrEnabled}
                 />
               </DialogContent>
@@ -394,7 +408,8 @@ export function ReimbursementManager({
             <TableRow>
               <TableHead>Receipt</TableHead>
               <SortHeader k="name">Description</SortHeader>
-              <SortHeader k="officer">Officer</SortHeader>
+              <SortHeader k="member">Member</SortHeader>
+              <SortHeader k="officer">Submitted by</SortHeader>
               <SortHeader k="category">Category</SortHeader>
               <SortHeader k="event">Event</SortHeader>
               <SortHeader k="date">Date</SortHeader>
@@ -437,7 +452,10 @@ export function ReimbursementManager({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{r.officer.name || r.officer.email}</TableCell>
+                  <TableCell className="font-medium">{payeeOf(r)}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.officer.name || r.officer.email}
+                  </TableCell>
                   <TableCell>{r.category?.name ?? "—"}</TableCell>
                   <TableCell>{r.event?.name ?? "—"}</TableCell>
                   <TableCell>{formatDate(r.date)}</TableCell>
@@ -465,7 +483,7 @@ export function ReimbursementManager({
                         </Button>
                       )}
                       {isTreasurer && r.status === "APPROVED" && (
-                        <Button size="sm" onClick={() => bundleToCheck(r.officer.id)}>
+                        <Button size="sm" onClick={() => bundleToCheck(payeeOf(r))}>
                           Pay via check
                         </Button>
                       )}
@@ -490,7 +508,7 @@ export function ReimbursementManager({
             })}
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
                   No reimbursements match the current filters
                 </TableCell>
               </TableRow>
@@ -525,11 +543,13 @@ function CreateReimbursementForm({
   onSubmit,
   categories,
   events,
+  currentUserName,
   ocrEnabled,
 }: {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   categories: Category[];
   events: EventOption[];
+  currentUserName: string;
   ocrEnabled: boolean;
 }) {
   const [name, setName] = useState("");
@@ -668,6 +688,18 @@ function CreateReimbursementForm({
           onChange={(e) => setName(e.target.value)}
         />
       </div>
+      <div className="space-y-2">
+        <Label>Member / paid to</Label>
+        <Input
+          name="memberName"
+          required
+          defaultValue={currentUserName}
+          placeholder="Who is being reimbursed?"
+        />
+        <p className="text-xs text-muted-foreground">
+          Defaults to you — change it if you&apos;re submitting for another member.
+        </p>
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Amount</Label>
@@ -763,6 +795,10 @@ function EditReimbursementForm({
       <div className="space-y-2">
         <Label>Name / description</Label>
         <Input name="name" required defaultValue={defaults.name} />
+      </div>
+      <div className="space-y-2">
+        <Label>Member / paid to</Label>
+        <Input name="memberName" required defaultValue={payeeOf(defaults)} />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">

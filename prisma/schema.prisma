@@ -177,6 +177,7 @@ model Reimbursement {
   officerId   String
   semesterId  String
   name        String
+  memberName  String?
   amount      Float
   date        DateTime
   categoryId  String?

@@ -97,9 +97,10 @@ export async function GET(
     });
     const headers = [
       "Name",
+      "Member",
       "Amount",
       "Date",
-      "Officer",
+      "Submitted by",
       "Category",
       "Tags",
       "Status",
@@ -109,6 +110,7 @@ export async function GET(
       lines.push(
         [
           r.name,
+          r.memberName || r.officer.name || r.officer.email,
           r.amount,
           r.date.toISOString().slice(0, 10),
           r.officer.email,

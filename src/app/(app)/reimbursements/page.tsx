@@ -62,6 +62,7 @@ export default async function ReimbursementsPage() {
         categories={categories}
         events={events}
         currentUserId={session.user.id}
+        currentUserName={session.user.name ?? session.user.email}
         isTreasurer={session.user.role === "TREASURER"}
         ocrEnabled={isOcrEnabled()}
       />

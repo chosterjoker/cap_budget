@@ -31,6 +31,12 @@ export async function createReimbursement(formData: FormData) {
   const session = await requireSession();
   const semesterId = formData.get("semesterId") as string;
   const name = formData.get("name") as string;
+  // Who the money is for. Defaults to the submitting officer, but can name a
+  // non-officer member the officer is submitting on behalf of.
+  const memberName =
+    ((formData.get("memberName") as string) || "").trim() ||
+    session.user.name ||
+    session.user.email;
   const amount = parseFloat(formData.get("amount") as string);
   const date = formData.get("date") as string;
   const categoryId = (formData.get("categoryId") as string) || undefined;
@@ -66,6 +72,7 @@ export async function createReimbursement(formData: FormData) {
       officerId: session.user.id,
       semesterId,
       name,
+      memberName,
       amount,
       date: new Date(date),
       categoryId: categoryId || null,
@@ -87,6 +94,7 @@ export async function updateReimbursement(
   id: string,
   data: Partial<{
     name: string;
+    memberName: string;
     amount: number;
     date: string;
     categoryId: string | null;
