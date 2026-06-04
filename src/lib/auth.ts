@@ -9,6 +9,13 @@ const hasGoogle =
   Boolean(process.env.AUTH_GOOGLE_ID) &&
   Boolean(process.env.AUTH_GOOGLE_SECRET);
 
+// Comma-separated allowlist of sign-in email domains, e.g.
+// "princeton.edu,gmail.com". Empty/unset means no domain restriction.
+const allowedEmailDomains =
+  process.env.ALLOWED_EMAIL_DOMAINS?.split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean) ?? [];
+
 declare module "next-auth" {
   interface Session {
     user: {
@@ -29,7 +36,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           Google({
             clientId: process.env.AUTH_GOOGLE_ID!,
             clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-            authorization: { params: { hd: "princeton.edu" } },
+            // Pre-restrict the Google account picker only when exactly one
+            // domain is allowed. `hd` takes a single domain, so for a multi-
+            // domain allowlist (e.g. princeton.edu + gmail.com) we omit it and
+            // let the signIn callback below enforce the full list instead.
+            ...(allowedEmailDomains.length === 1
+              ? { authorization: { params: { hd: allowedEmailDomains[0] } } }
+              : {}),
           }),
         ]
       : [
@@ -76,12 +89,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const email = user.email?.toLowerCase();
       if (!email) return false;
 
-      const allowedDomains = process.env.ALLOWED_EMAIL_DOMAINS?.split(",")
-        .map((d) => d.trim().toLowerCase())
-        .filter(Boolean);
-      if (allowedDomains?.length) {
+      if (allowedEmailDomains.length) {
         const domain = email.split("@")[1];
-        if (!domain || !allowedDomains.includes(domain)) return false;
+        if (!domain || !allowedEmailDomains.includes(domain)) return false;
       }
       return true;
     },
