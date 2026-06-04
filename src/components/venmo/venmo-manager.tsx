@@ -81,7 +81,8 @@ export function VenmoManager({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     try {
       await createVenmoIncome({
         semesterId,
@@ -92,8 +93,8 @@ export function VenmoManager({
         weekId: (fd.get("weekId") as string) || undefined,
       });
       toast.success("Venmo income recorded");
+      form.reset();
       router.refresh();
-      e.currentTarget.reset();
     } catch {
       toast.error("Failed to record");
     }

@@ -71,7 +71,8 @@ export function DepositTracker({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     try {
       await createDeposit({
         semesterId,
@@ -80,8 +81,8 @@ export function DepositTracker({
         notes: (fd.get("notes") as string) || undefined,
       });
       toast.success("Deposit recorded");
+      form.reset();
       router.refresh();
-      e.currentTarget.reset();
     } catch {
       toast.error("Failed to record deposit");
     }
