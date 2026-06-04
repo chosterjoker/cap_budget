@@ -18,7 +18,12 @@ export default async function ChecksPage() {
     prisma.check.findMany({
       where: { semesterId: semester.id },
       orderBy: { date: "desc" },
-      include: { category: true, event: true },
+      include: {
+        category: true,
+        event: true,
+        // Used to flag checks that settle reimbursements vs. manual payments.
+        _count: { select: { reimbursements: true } },
+      },
     }),
     prisma.budgetCategory.findMany({
       where: { semesterId: semester.id },

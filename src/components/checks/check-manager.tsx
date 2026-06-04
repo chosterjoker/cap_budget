@@ -51,6 +51,8 @@ type CheckRow = {
   eventId: string | null;
   category: { name: string } | null;
   event: { name: string } | null;
+  // > 0 when this check settles reimbursements rather than being a manual payment.
+  _count: { reimbursements: number };
 };
 
 type Category = { id: string; name: string };
@@ -387,10 +389,31 @@ export function CheckManager({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-mono">{c.checkNumber}</TableCell>
-                <TableCell>{c.description}</TableCell>
+            {sorted.map((c) => {
+              const isSettlement = c._count.reimbursements > 0;
+              return (
+              <TableRow
+                key={c.id}
+                className={isSettlement ? "bg-violet-50/50 dark:bg-violet-950/15" : undefined}
+              >
+                <TableCell
+                  className={`font-mono border-l-4 ${
+                    isSettlement ? "border-l-violet-400" : "border-l-transparent"
+                  }`}
+                >
+                  {c.checkNumber}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span>{c.description}</span>
+                    {isSettlement && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                        Reimbursement
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>{c.recipientName}</TableCell>
                 <TableCell>{c.category?.name ?? "—"}</TableCell>
                 <TableCell>{c.event?.name ?? "—"}</TableCell>
@@ -428,7 +451,8 @@ export function CheckManager({
                   </TableCell>
                 )}
               </TableRow>
-            ))}
+              );
+            })}
             {sorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={isTreasurer ? 10 : 9} className="text-center text-sm text-muted-foreground">
