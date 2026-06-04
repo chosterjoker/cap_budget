@@ -196,7 +196,7 @@ export async function getDashboardStats(semesterId: string) {
       ...recentReimbursements.map((r) => ({
         type: "reimbursement" as const,
         date: r.date,
-        title: `${r.name} (${r.officer.name})`,
+        title: `${r.name} (${r.memberName ?? r.officer.name ?? r.officer.email})`,
         amount: r.amount,
       })),
       ...recentDeposits.map((d) => ({
