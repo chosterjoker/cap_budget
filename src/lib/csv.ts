@@ -53,8 +53,8 @@ export type SocialCalendarRow = {
 function parseMdy(raw: string): Date | null {
   const m = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (!m) return null;
-  let [, mm, dd, yy] = m;
-  if (yy.length === 2) yy = `20${yy}`;
+  const [, mm, dd, rawYy] = m;
+  const yy = rawYy.length === 2 ? `20${rawYy}` : rawYy;
   const d = new Date(Number(yy), Number(mm) - 1, Number(dd));
   return isNaN(d.getTime()) ? null : d;
 }

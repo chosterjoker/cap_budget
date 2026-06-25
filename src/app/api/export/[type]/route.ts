@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getBudgetGridData } from "@/lib/budget-data";
+import { getActiveSemester } from "@/lib/semester";
+
+export const dynamic = "force-dynamic";
 
 function csvEscape(value: string | number) {
   const s = String(value);
@@ -11,19 +15,42 @@ function csvEscape(value: string | number) {
   return s;
 }
 
+// Allows Google Sheets `=IMPORTDATA()` (which sends no login cookie) to read
+// exports via a shared secret token, without granting any write access.
+function hasValidSyncToken(provided: string | null): boolean {
+  const secret = process.env.SHEETS_SYNC_TOKEN;
+  if (!secret || !provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(secret);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ type: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const token = req.nextUrl.searchParams.get("token");
+  if (!hasValidSyncToken(token)) {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const { type } = await params;
-  const semesterId = req.nextUrl.searchParams.get("semesterId");
-  if (!semesterId) {
-    return NextResponse.json({ error: "semesterId required" }, { status: 400 });
+  // `semesterId=active` (or omitting it) targets the active semester, so a
+  // long-lived IMPORTDATA formula keeps working across semester rollovers.
+  const requestedSemesterId = req.nextUrl.searchParams.get("semesterId");
+  let semesterId = requestedSemesterId;
+  if (!semesterId || semesterId === "active") {
+    const active = await getActiveSemester();
+    if (!active) {
+      return NextResponse.json(
+        { error: "No active semester" },
+        { status: 400 }
+      );
+    }
+    semesterId = active.id;
   }
 
   let csv = "";
@@ -124,6 +151,22 @@ export async function GET(
     }
     csv = lines.join("\n");
     filename = "reimbursements.csv";
+  } else if (type === "deposits") {
+    const deposits = await prisma.deposit.findMany({
+      where: { semesterId },
+      orderBy: { date: "desc" },
+    });
+    const headers = ["Amount", "Date", "Notes"];
+    const lines = [headers.join(",")];
+    for (const d of deposits) {
+      lines.push(
+        [d.amount, d.date.toISOString().slice(0, 10), d.notes ?? ""]
+          .map(csvEscape)
+          .join(",")
+      );
+    }
+    csv = lines.join("\n");
+    filename = "deposits.csv";
   } else {
     return NextResponse.json({ error: "Unknown export type" }, { status: 400 });
   }
@@ -132,6 +175,7 @@ export async function GET(
     headers: {
       "Content-Type": "text/csv",
       "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store, max-age=0",
     },
   });
 }

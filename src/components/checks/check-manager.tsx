@@ -166,7 +166,7 @@ export function CheckManager({
     }
   }
 
-  function SortHeader({ k, children, align }: { k: SortKey; children: React.ReactNode; align?: "right" }) {
+  function sortHeader(k: SortKey, label: React.ReactNode, align?: "right") {
     const Icon = sortKey !== k ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
     return (
       <TableHead className={align === "right" ? "text-right" : undefined}>
@@ -177,7 +177,7 @@ export function CheckManager({
             align === "right" ? "ml-auto" : ""
           }`}
         >
-          {children}
+          {label}
           <Icon className="h-3 w-3 opacity-60" />
         </button>
       </TableHead>
@@ -376,15 +376,15 @@ export function CheckManager({
         <Table>
           <TableHeader>
             <TableRow>
-              <SortHeader k="checkNumber">ID</SortHeader>
-              <SortHeader k="description">Description</SortHeader>
-              <SortHeader k="recipientName">Recipient</SortHeader>
-              <SortHeader k="category">Category</SortHeader>
-              <SortHeader k="event">Event</SortHeader>
-              <SortHeader k="paymentMethod">Method</SortHeader>
-              <SortHeader k="date">Date</SortHeader>
-              <SortHeader k="amount" align="right">Amount</SortHeader>
-              <SortHeader k="cleared">Cleared?</SortHeader>
+              {sortHeader("checkNumber", "ID")}
+              {sortHeader("description", "Description")}
+              {sortHeader("recipientName", "Recipient")}
+              {sortHeader("category", "Category")}
+              {sortHeader("event", "Event")}
+              {sortHeader("paymentMethod", "Method")}
+              {sortHeader("date", "Date")}
+              {sortHeader("amount", "Amount", "right")}
+              {sortHeader("cleared", "Cleared?")}
               {isTreasurer && <TableHead />}
             </TableRow>
           </TableHeader>

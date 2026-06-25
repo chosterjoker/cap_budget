@@ -64,7 +64,6 @@ export function BudgetGrid({
   totalSpent,
   totalRemaining,
   percentRemaining,
-  isTreasurer,
   paymentMethods,
 }: {
   semesterId: string;

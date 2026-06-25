@@ -79,6 +79,10 @@ function payeeOf(r: { memberName: string | null; officer: Officer }) {
   return r.memberName?.trim() || r.officer.name || r.officer.email;
 }
 
+function reimbursementCheckNumber() {
+  return `R-${Date.now().toString().slice(-6)}`;
+}
+
 export function ReimbursementManager({
   semesterId,
   reimbursements,
@@ -182,7 +186,7 @@ export function ReimbursementManager({
     }
   }
 
-  function SortHeader({ k, children, align }: { k: SortKey; children: React.ReactNode; align?: "right" }) {
+  function sortHeader(k: SortKey, label: React.ReactNode, align?: "right") {
     const Icon = sortKey !== k ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
     return (
       <TableHead className={align === "right" ? "text-right" : undefined}>
@@ -193,7 +197,7 @@ export function ReimbursementManager({
             align === "right" ? "ml-auto" : ""
           }`}
         >
-          {children}
+          {label}
           <Icon className="h-3 w-3 opacity-60" />
         </button>
       </TableHead>
@@ -270,7 +274,7 @@ export function ReimbursementManager({
     try {
       await createCheck({
         semesterId,
-        checkNumber: `R-${Date.now().toString().slice(-6)}`,
+        checkNumber: reimbursementCheckNumber(),
         description: `Reimbursement — ${payee}`,
         amount: total,
         date: todayInput(),
@@ -407,14 +411,14 @@ export function ReimbursementManager({
           <TableHeader>
             <TableRow>
               <TableHead>Receipt</TableHead>
-              <SortHeader k="name">Description</SortHeader>
-              <SortHeader k="member">Member</SortHeader>
-              <SortHeader k="officer">Submitted by</SortHeader>
-              <SortHeader k="category">Category</SortHeader>
-              <SortHeader k="event">Event</SortHeader>
-              <SortHeader k="date">Date</SortHeader>
-              <SortHeader k="amount" align="right">Amount</SortHeader>
-              <SortHeader k="status">Status</SortHeader>
+              {sortHeader("name", "Description")}
+              {sortHeader("member", "Member")}
+              {sortHeader("officer", "Submitted by")}
+              {sortHeader("category", "Category")}
+              {sortHeader("event", "Event")}
+              {sortHeader("date", "Date")}
+              {sortHeader("amount", "Amount", "right")}
+              {sortHeader("status", "Status")}
               <TableHead />
             </TableRow>
           </TableHeader>

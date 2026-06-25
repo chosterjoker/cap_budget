@@ -1,7 +1,10 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-const publicPaths = ["/login", "/api/auth"];
+// `/api/export` is listed here so the middleware doesn't redirect to /login;
+// that route enforces its own auth (a valid sync token OR a logged-in session),
+// which lets Google Sheets =IMPORTDATA() read CSV with a token but no cookie.
+const publicPaths = ["/login", "/api/auth", "/api/export"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

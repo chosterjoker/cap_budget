@@ -5,7 +5,6 @@ import { CheckManager } from "@/components/checks/check-manager";
 import { isOcrEnabled } from "@/lib/ocr";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
 
 export default async function ChecksPage() {
   const session = await auth();
