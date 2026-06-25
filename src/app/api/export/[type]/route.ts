@@ -65,7 +65,7 @@ export async function GET(
       "% Remaining",
       ...grid.weeks.map((w) => `W${w.weekNumber}${w.label ? ` (${w.label})` : ""}`),
     ];
-    const lines = [headers.join(",")];
+    const lines = [headers.map(csvEscape).join(",")];
     for (const row of grid.rows) {
       lines.push(
         [
@@ -97,7 +97,7 @@ export async function GET(
       "Method",
       "Cleared",
     ];
-    const lines = [headers.join(",")];
+    const lines = [headers.map(csvEscape).join(",")];
     for (const c of checks) {
       lines.push(
         [
@@ -132,7 +132,7 @@ export async function GET(
       "Tags",
       "Status",
     ];
-    const lines = [headers.join(",")];
+    const lines = [headers.map(csvEscape).join(",")];
     for (const r of items) {
       lines.push(
         [
@@ -157,7 +157,7 @@ export async function GET(
       orderBy: { date: "desc" },
     });
     const headers = ["Amount", "Date", "Notes"];
-    const lines = [headers.join(",")];
+    const lines = [headers.map(csvEscape).join(",")];
     for (const d of deposits) {
       lines.push(
         [d.amount, d.date.toISOString().slice(0, 10), d.notes ?? ""]
