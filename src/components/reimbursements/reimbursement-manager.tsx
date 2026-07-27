@@ -178,6 +178,14 @@ export function ReimbursementManager({
     return t;
   }, [filtered]);
 
+  const hasActiveFilters =
+    search !== "" ||
+    sinceDate !== "" ||
+    officerFilter !== "all" ||
+    categoryFilter !== "all" ||
+    eventFilter !== "all" ||
+    statusFilter !== "all";
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
     else {
@@ -291,118 +299,37 @@ export function ReimbursementManager({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Search name, officer, tags, notes…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          className="w-full sm:max-w-xs"
         />
-        <div className="space-y-1">
-          <Input
-            type="date"
-            value={sinceDate}
-            onChange={(e) => setSinceDate(e.target.value)}
-            aria-label="Since date"
-          />
-          <p className="text-[10px] text-muted-foreground">Show on or after</p>
-        </div>
-        <Select value={officerFilter} onValueChange={(v) => setOfficerFilter(v ?? "all")}>
-          <SelectTrigger>
-            <SelectValue>
-              {officerFilter === "all"
-                ? "All officers"
-                : (() => {
-                    const o = officers.find((o) => o.id === officerFilter);
-                    return o ? o.name || o.email : "All officers";
-                  })()}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All officers</SelectItem>
-            {officers.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.name || o.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? "all")}>
-          <SelectTrigger>
-            <SelectValue>
-              {categoryFilter === "all"
-                ? "All categories"
-                : categories.find((c) => c.id === categoryFilter)?.name ?? "All categories"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={eventFilter} onValueChange={(v) => setEventFilter(v ?? "all")}>
-          <SelectTrigger>
-            <SelectValue>
-              {eventFilter === "all"
-                ? "All events"
-                : events.find((e) => e.id === eventFilter)?.name ?? "All events"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All events</SelectItem>
-            {events.map((e) => (
-              <SelectItem key={e.id} value={e.id}>
-                {e.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter((v ?? "all") as typeof statusFilter)}>
-          <SelectTrigger>
-            <SelectValue>
-              {statusFilter === "all"
-                ? "All status"
-                : statusFilter === "PENDING"
-                  ? "Pending"
-                  : statusFilter === "APPROVED"
-                    ? "Approved"
-                    : "Paid"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            <SelectItem value="PENDING">Pending</SelectItem>
-            <SelectItem value="APPROVED">Approved</SelectItem>
-            <SelectItem value="PAID">Paid</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} of {reimbursements.length} · Pending {formatCurrency(totals.pending)} · Approved {formatCurrency(totals.approved)} · Paid {formatCurrency(totals.paid)}
-          </p>
-          <div className="flex gap-2">
+        <p className="text-sm text-muted-foreground">
+          {filtered.length} of {reimbursements.length} · Pending {formatCurrency(totals.pending)} · Approved {formatCurrency(totals.approved)} · Paid {formatCurrency(totals.paid)}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {hasActiveFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               Clear filters
             </Button>
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-              <DialogTrigger render={<Button size="sm">Submit reimbursement</Button>} />
-              <DialogContent className="max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>New reimbursement</DialogTitle>
-                </DialogHeader>
-                <CreateReimbursementForm
-                  onSubmit={handleCreate}
-                  categories={categories}
-                  events={events}
-                  currentUserName={currentUserName}
-                  ocrEnabled={ocrEnabled}
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
+          )}
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger render={<Button size="sm">Submit reimbursement</Button>} />
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>New reimbursement</DialogTitle>
+              </DialogHeader>
+              <CreateReimbursementForm
+                onSubmit={handleCreate}
+                categories={categories}
+                events={events}
+                currentUserName={currentUserName}
+                ocrEnabled={ocrEnabled}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -420,6 +347,116 @@ export function ReimbursementManager({
               {sortHeader("amount", "Amount", "right")}
               {sortHeader("status", "Status")}
               <TableHead />
+            </TableRow>
+            <TableRow className="bg-muted/20 hover:bg-transparent">
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5">
+                <Select value={officerFilter} onValueChange={(v) => setOfficerFilter(v ?? "all")}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${officerFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {officerFilter === "all"
+                        ? "All"
+                        : (() => {
+                            const o = officers.find((o) => o.id === officerFilter);
+                            return o ? o.name || o.email : "All";
+                          })()}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All officers</SelectItem>
+                    {officers.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name || o.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="h-auto py-1.5">
+                <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? "all")}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${categoryFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {categoryFilter === "all"
+                        ? "All"
+                        : categories.find((c) => c.id === categoryFilter)?.name ?? "All"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All categories</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="h-auto py-1.5">
+                <Select value={eventFilter} onValueChange={(v) => setEventFilter(v ?? "all")}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${eventFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {eventFilter === "all"
+                        ? "All"
+                        : events.find((e) => e.id === eventFilter)?.name ?? "All"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All events</SelectItem>
+                    {events.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="h-auto py-1.5">
+                <Input
+                  type="date"
+                  value={sinceDate}
+                  onChange={(e) => setSinceDate(e.target.value)}
+                  aria-label="Show reimbursements on or after this date"
+                  title="Show reimbursements on or after this date"
+                  className="h-7 font-normal"
+                />
+              </TableHead>
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5">
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter((v ?? "all") as typeof statusFilter)}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${statusFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {statusFilter === "all"
+                        ? "All"
+                        : statusFilter === "PENDING"
+                          ? "Pending"
+                          : statusFilter === "APPROVED"
+                            ? "Approved"
+                            : "Paid"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All status</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="APPROVED">Approved</SelectItem>
+                    <SelectItem value="PAID">Paid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="h-auto py-1.5" />
             </TableRow>
           </TableHeader>
           <TableBody>
