@@ -28,7 +28,7 @@ async function main() {
       grid.weeks.map((w) => w.label)
     );
   } catch (err) {
-    console.error("[debug] CAUGHT ERROR:");
+    console.error("[debug] CAUGHT ERROR:"); 
     console.error(err);
   } finally {
     await prisma.$disconnect();
