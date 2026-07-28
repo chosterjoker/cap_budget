@@ -96,15 +96,15 @@ export function ReconciliationPanel({
         <CardTitle>Bank reconciliation</CardTitle>
         <p className="text-sm text-muted-foreground">
           Computed balance is{" "}
-          <span className="font-mono">{formatCurrency(expectedBankBalance)}</span>.
+          <span className="tabular-nums">{formatCurrency(expectedBankBalance)}</span>.
           Record what the bank site actually shows to catch any drift.
         </p>
         {latest && delta !== null && (
           <p className="text-sm">
             Last reconciled {formatDate(latest.date)}:{" "}
-            <span className="font-mono">{formatCurrency(latest.actualBalance)}</span>{" "}
+            <span className="tabular-nums">{formatCurrency(latest.actualBalance)}</span>{" "}
             actual ·{" "}
-            <span className={cn("font-mono", deltaClass(delta))}>
+            <span className={cn("tabular-nums", deltaClass(delta))}>
               {delta >= 0 ? "+" : ""}
               {formatCurrency(delta)}
             </span>{" "}
@@ -161,7 +161,7 @@ export function ReconciliationPanel({
                 {reconciliations.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>{formatDate(r.date)}</TableCell>
-                    <TableCell className="font-mono">
+                    <TableCell className="tabular-nums">
                       {formatCurrency(r.actualBalance)}
                     </TableCell>
                     <TableCell>{r.notes || "—"}</TableCell>
@@ -241,5 +241,5 @@ export function ReconciliationPanel({
 // Small helper kept here so the dashboard can colour the delta consistently.
 export function deltaClass(delta: number | null) {
   if (delta === null || Math.abs(delta) < 0.005) return "text-muted-foreground";
-  return cn(delta > 0 ? "text-emerald-600" : "text-amber-600");
+  return cn(delta > 0 ? "text-success-fg" : "text-warning-fg");
 }

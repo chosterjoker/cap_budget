@@ -2,12 +2,22 @@ import { auth } from "@/lib/auth";
 import { getActiveSemester } from "@/lib/semester";
 import { prisma } from "@/lib/prisma";
 import { VenmoManager } from "@/components/venmo/venmo-manager";
+import { PageHeader } from "@/components/common/page-header";
+import { EmptyState } from "@/components/common/empty-state";
+import { CalendarPlus } from "lucide-react";
 
 export default async function VenmoPage() {
   const session = await auth();
   const semester = await getActiveSemester();
   if (!semester) {
-    return <p className="text-muted-foreground">No active semester.</p>;
+    return (
+      <EmptyState
+        icon={CalendarPlus}
+        title="No active semester"
+        description="Venmo collections are recorded against an active semester."
+        action={{ href: "/settings", label: "Go to Settings" }}
+      />
+    );
   }
 
   const [entries, weeks, total] = await Promise.all([
@@ -36,12 +46,10 @@ export default async function VenmoPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Venmo Income</h2>
-        <p className="text-muted-foreground">
-          Event collections separate from check payments
-        </p>
-      </div>
+      <PageHeader
+        title="Venmo income"
+        description="Event collections, tracked separately from check payments"
+      />
       <VenmoManager
         semesterId={semester.id}
         entries={entries}

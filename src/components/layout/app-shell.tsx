@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { UserMenu } from "@/components/layout/user-menu";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import type { Role } from "@prisma/client";
 
 const navItems = [
@@ -103,14 +104,17 @@ export function AppShell({
         <div className="flex-1 overflow-y-auto">
           <NavLinks pathname={pathname} role={user.role} />
         </div>
-        <div className="pt-4">
+        <div className="space-y-2 pt-4">
+          <ThemeToggle className="w-full" />
           <UserMenu user={user} />
         </div>
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:px-6">
-          <div className="flex items-center gap-2 md:hidden">
+        {/* Mobile-only. On desktop the sidebar already carries the brand, nav,
+            theme toggle and user menu, so this bar would render empty. */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:hidden">
+          <div className="flex items-center gap-2">
             <Sheet>
               <SheetTrigger
                 render={
@@ -147,12 +151,16 @@ export function AppShell({
             />
             <span className="font-semibold">Budget & Tracking</span>
           </div>
-          <div className="hidden md:block" />
-          <div className="md:hidden">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
             <UserMenu user={user} />
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+        {/* One container for every page, so widths and gutters never drift
+            between routes. Wide tables scroll inside their own wrapper. */}
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        </main>
       </div>
     </div>
   );

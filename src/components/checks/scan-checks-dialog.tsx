@@ -248,7 +248,7 @@ export function ScanChecksDialog({
                 Browse
               </span>
             </label>
-            {error && <p className="text-xs text-amber-600">{error}</p>}
+            {error && <p className="text-xs text-warning-fg">{error}</p>}
           </div>
         )}
 
@@ -307,8 +307,8 @@ export function ScanChecksDialog({
                       i === current
                         ? "bg-primary text-primary-foreground"
                         : draftValid(d)
-                          ? "bg-emerald-500/15 text-emerald-700"
-                          : "bg-amber-500/15 text-amber-700"
+                          ? "bg-success-muted text-success-fg"
+                          : "bg-warning-muted text-warning-fg"
                     }`}
                   >
                     {i + 1}
@@ -330,7 +330,7 @@ export function ScanChecksDialog({
               <p className="text-sm font-medium">
                 Check {current + 1} of {drafts.length}
                 {draftValid(draft) && (
-                  <CheckIcon className="ml-1 inline h-3.5 w-3.5 text-emerald-600" />
+                  <CheckIcon className="ml-1 inline h-3.5 w-3.5 text-success-fg" />
                 )}
               </p>
               <Button
@@ -461,7 +461,7 @@ export function ScanChecksDialog({
 
             <div className="space-y-2 border-t pt-3">
               {!allValid && (
-                <p className="text-xs text-amber-600">
+                <p className="text-xs text-warning-fg">
                   {invalidCount} check{invalidCount > 1 ? "s" : ""} still need a category,
                   recipient, #, description, date, or a valid amount.
                 </p>

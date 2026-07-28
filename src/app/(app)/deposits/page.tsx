@@ -3,12 +3,22 @@ import { getActiveSemester } from "@/lib/semester";
 import { prisma } from "@/lib/prisma";
 import { getBudgetGridData } from "@/lib/budget-data";
 import { DepositTracker } from "@/components/deposits/deposit-tracker";
+import { PageHeader } from "@/components/common/page-header";
+import { EmptyState } from "@/components/common/empty-state";
+import { CalendarPlus } from "lucide-react";
 
 export default async function DepositsPage() {
   const session = await auth();
   const semester = await getActiveSemester();
   if (!semester) {
-    return <p className="text-muted-foreground">No active semester.</p>;
+    return (
+      <EmptyState
+        icon={CalendarPlus}
+        title="No active semester"
+        description="Deposits are tracked against an active semester."
+        action={{ href: "/settings", label: "Go to Settings" }}
+      />
+    );
   }
 
   const [deposits, budget, clearedChecks, sem] = await Promise.all([
@@ -36,12 +46,10 @@ export default async function DepositsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Deposits & Balance</h2>
-        <p className="text-muted-foreground">
-          Track partial bank deposits and actual account balance
-        </p>
-      </div>
+      <PageHeader
+        title="Deposits & balance"
+        description="Partial bank deposits and the resulting account balance"
+      />
       <DepositTracker
         semesterId={semester.id}
         deposits={deposits}

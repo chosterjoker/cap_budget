@@ -3,14 +3,24 @@ import { getActiveSemester } from "@/lib/semester";
 import { prisma } from "@/lib/prisma";
 import { CheckManager } from "@/components/checks/check-manager";
 import { isOcrEnabled } from "@/lib/ocr";
+import { PageHeader } from "@/components/common/page-header";
+import { EmptyState } from "@/components/common/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CalendarPlus, Download } from "lucide-react";
 
 export default async function ChecksPage() {
   const session = await auth();
   const semester = await getActiveSemester();
   if (!semester) {
-    return <p className="text-muted-foreground">No active semester.</p>;
+    return (
+      <EmptyState
+        icon={CalendarPlus}
+        title="No active semester"
+        description="Checks and payments are recorded against an active semester."
+        action={{ href: "/settings", label: "Go to Settings" }}
+      />
+    );
   }
 
   const [checks, categories, events, reimbursements] = await Promise.all([
@@ -41,20 +51,19 @@ export default async function ChecksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-2xl font-bold">Check Register</h2>
-          <p className="text-muted-foreground">
-            Checks, wire transfers, and other payments
-          </p>
-        </div>
-        <a
-          href={`/api/export/checks?semesterId=${semester.id}`}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          Export CSV
-        </a>
-      </div>
+      <PageHeader
+        title="Check register"
+        description="Checks, wire transfers, and other payments"
+        actions={
+          <a
+            href={`/api/export/checks?semesterId=${semester.id}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </a>
+        }
+      />
       <CheckManager
         semesterId={semester.id}
         checks={checks}

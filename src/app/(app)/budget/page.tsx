@@ -1,8 +1,9 @@
-import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { CalendarPlus, Download } from "lucide-react";
 import { getActiveSemester } from "@/lib/semester";
 import { getBudgetGridData } from "@/lib/budget-data";
 import { BudgetGrid } from "@/components/budget/budget-grid";
+import { PageHeader } from "@/components/common/page-header";
+import { EmptyState } from "@/components/common/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,36 +17,35 @@ const PAYMENT_METHODS = [
 ];
 
 export default async function BudgetPage() {
-  const session = await auth();
   const semester = await getActiveSemester();
   if (!semester) {
     return (
-      <p className="text-muted-foreground">
-        No active semester.{" "}
-        <Link href="/settings" className="underline">
-          Create one
-        </Link>
-      </p>
+      <EmptyState
+        icon={CalendarPlus}
+        title="No active semester"
+        description="The budget grid needs an active semester with categories and weeks."
+        action={{ href: "/settings", label: "Go to Settings" }}
+      />
     );
   }
 
   const grid = await getBudgetGridData(semester.id);
-  const isTreasurer = session?.user.role === "TREASURER";
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-2xl font-bold">Budget Grid</h2>
-          <p className="text-muted-foreground">{semester.name}</p>
-        </div>
-        <a
-          href={`/api/export/budget?semesterId=${semester.id}`}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          Export CSV
-        </a>
-      </div>
+      <PageHeader
+        title="Budget grid"
+        description={`${semester.name} · spending by category and week`}
+        actions={
+          <a
+            href={`/api/export/budget?semesterId=${semester.id}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </a>
+        }
+      />
       <BudgetGrid
         semesterId={semester.id}
         weeks={grid.weeks}
@@ -55,7 +55,6 @@ export default async function BudgetPage() {
         totalSpent={grid.totalSpent}
         totalRemaining={grid.totalRemaining}
         percentRemaining={grid.percentRemaining}
-        isTreasurer={isTreasurer}
         paymentMethods={PAYMENT_METHODS}
       />
     </div>

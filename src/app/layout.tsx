@@ -14,7 +14,7 @@ const heading = Bricolage_Grotesque({
 });
 
 const mono = JetBrains_Mono({
-  variable: "--font-mono",
+  variable: "--tabular-nums",
   subsets: ["latin"],
 });
 
@@ -29,8 +29,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // next-themes stamps the theme class onto <html> before hydration, so the
+    // server and client markup differ by design on this one element.
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${sans.variable} ${heading.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">

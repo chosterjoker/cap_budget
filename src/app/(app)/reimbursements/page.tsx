@@ -3,14 +3,24 @@ import { getActiveSemester } from "@/lib/semester";
 import { prisma } from "@/lib/prisma";
 import { ReimbursementManager } from "@/components/reimbursements/reimbursement-manager";
 import { isOcrEnabled } from "@/lib/ocr";
+import { PageHeader } from "@/components/common/page-header";
+import { EmptyState } from "@/components/common/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CalendarPlus, Download } from "lucide-react";
 
 export default async function ReimbursementsPage() {
   const session = await auth();
   const semester = await getActiveSemester();
   if (!semester || !session?.user) {
-    return <p className="text-muted-foreground">No active semester.</p>;
+    return (
+      <EmptyState
+        icon={CalendarPlus}
+        title="No active semester"
+        description="Reimbursements are filed against an active semester."
+        action={{ href: "/settings", label: "Go to Settings" }}
+      />
+    );
   }
 
   const [reimbursements, officers, categories, events] = await Promise.all([
@@ -41,20 +51,19 @@ export default async function ReimbursementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-2xl font-bold">Reimbursements</h2>
-          <p className="text-muted-foreground">
-            Officer purchases awaiting reimbursement
-          </p>
-        </div>
-        <a
-          href={`/api/export/reimbursements?semesterId=${semester.id}`}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          Export CSV
-        </a>
-      </div>
+      <PageHeader
+        title="Reimbursements"
+        description="Officer purchases awaiting reimbursement"
+        actions={
+          <a
+            href={`/api/export/reimbursements?semesterId=${semester.id}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </a>
+        }
+      />
       <ReimbursementManager
         semesterId={semester.id}
         reimbursements={reimbursements}

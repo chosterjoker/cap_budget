@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile, StatRow } from "@/components/common/stat-tile";
+import { EmptyRow } from "@/components/common/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -102,21 +104,23 @@ export function VenmoManager({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-muted-foreground">
-            Total Venmo income (this semester)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold text-emerald-600">
-            {formatCurrency(total)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Tracked separately from checks; increases available funds
-          </p>
-        </CardContent>
-      </Card>
+      <StatRow cols={3}>
+        <StatTile
+          label="Total Venmo income"
+          value={formatCurrency(total)}
+          hint="Increases available funds on the dashboard"
+          tone="success"
+        />
+        <StatTile
+          label="Collections logged"
+          value={String(entries.length)}
+          hint="This semester"
+        />
+        <StatTile
+          label="Average collection"
+          value={formatCurrency(entries.length ? total / entries.length : 0)}
+        />
+      </StatRow>
 
       {isTreasurer && (
         <Card>
@@ -199,7 +203,7 @@ export function VenmoManager({
                     ? `W${e.week.weekNumber}${e.week.label ? ` (${e.week.label})` : ""}`
                     : "—"}
                 </TableCell>
-                <TableCell className="text-right font-mono">
+                <TableCell className="text-right tabular-nums">
                   {formatCurrency(e.amount)}
                 </TableCell>
                 {isTreasurer && (
@@ -225,6 +229,13 @@ export function VenmoManager({
                 )}
               </TableRow>
             ))}
+            {entries.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={isTreasurer ? 6 : 5}>
+                  <EmptyRow>No Venmo collections logged yet.</EmptyRow>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

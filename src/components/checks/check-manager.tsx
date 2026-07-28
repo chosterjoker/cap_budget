@@ -426,15 +426,18 @@ export function CheckManager({
           </TableHeader>
           <TableBody>
             {sorted.map((c) => {
+              // Settlement checks get a palette hue rather than a status
+              // colour — being a settlement isn't good or bad, it's an
+              // identity. The dot carries it so the text stays in ink.
               const isSettlement = c._count.reimbursements > 0;
               return (
               <TableRow
                 key={c.id}
-                className={isSettlement ? "bg-violet-50/50 dark:bg-violet-950/15" : undefined}
+                className={isSettlement ? "bg-chart-5/5" : undefined}
               >
                 <TableCell
-                  className={`font-mono border-l-4 ${
-                    isSettlement ? "border-l-violet-400" : "border-l-transparent"
+                  className={`tabular-nums border-l-4 ${
+                    isSettlement ? "border-l-chart-5" : "border-l-transparent"
                   }`}
                 >
                   {c.checkNumber}
@@ -443,8 +446,8 @@ export function CheckManager({
                   <div className="flex items-center gap-2">
                     <span>{c.description}</span>
                     {isSettlement && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-chart-5/15 px-2 py-0.5 text-xs font-medium">
+                        <span className="h-1.5 w-1.5 rounded-full bg-chart-5" />
                         Reimbursement
                       </span>
                     )}
@@ -457,7 +460,7 @@ export function CheckManager({
                   <Badge variant="outline">{PAYMENT_LABELS[c.paymentMethod]}</Badge>
                 </TableCell>
                 <TableCell>{formatDate(c.date)}</TableCell>
-                <TableCell className="text-right font-mono">{formatCurrency(c.amount)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatCurrency(c.amount)}</TableCell>
                 <TableCell>
                   {c.cleared ? (
                     <Badge>Yes</Badge>
@@ -608,7 +611,7 @@ function CheckForm({
                     />
                     {r.name} · {r.memberName}
                   </span>
-                  <span className="font-mono">{formatCurrency(r.amount)}</span>
+                  <span className="tabular-nums">{formatCurrency(r.amount)}</span>
                 </label>
               );
             })}

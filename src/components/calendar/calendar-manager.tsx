@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile, StatRow } from "@/components/common/stat-tile";
 import {
   Dialog,
   DialogContent,
@@ -83,6 +83,10 @@ export function CalendarManager({
 
   const totalSpend = filtered.reduce((s, e) => s + e.total, 0);
   const informationalCount = events.filter((e) => e.isInformational).length;
+  const topEvent = filtered.reduce<CalendarEvent | null>(
+    (best, e) => (e.total > 0 && (!best || e.total > best.total) ? e : best),
+    null
+  );
 
   async function handleImport(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -144,56 +148,27 @@ export function CalendarManager({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Events</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{filtered.length}</p>
-            {informationalCount > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {informationalCount} informational
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Total event spend
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatCurrency(totalSpend)}</p>
-            <p className="text-xs text-muted-foreground">
-              Spend tagged to events (from expenses + reimbursements)
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Most expensive
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {(() => {
-              const top = [...filtered].sort((a, b) => b.total - a.total)[0];
-              if (!top || top.total === 0)
-                return <p className="text-muted-foreground">No spend yet</p>;
-              return (
-                <>
-                  <p className="text-base font-semibold">{top.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatCurrency(top.total)}
-                  </p>
-                </>
-              );
-            })()}
-          </CardContent>
-        </Card>
-      </div>
+      <StatRow cols={3}>
+        <StatTile
+          label="Events"
+          value={String(filtered.length)}
+          hint={
+            informationalCount > 0
+              ? `${informationalCount} informational`
+              : undefined
+          }
+        />
+        <StatTile
+          label="Total event spend"
+          value={formatCurrency(totalSpend)}
+          hint="Tagged to events, from expenses and reimbursements"
+        />
+        <StatTile
+          label="Most expensive"
+          value={topEvent ? formatCurrency(topEvent.total) : "—"}
+          hint={topEvent ? topEvent.name : "No spend tagged yet"}
+        />
+      </StatRow>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
@@ -324,7 +299,7 @@ export function CalendarManager({
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    <p className="font-mono text-sm font-semibold">
+                    <p className="tabular-nums text-sm font-semibold">
                       {e.total > 0 ? formatCurrency(e.total) : "—"}
                     </p>
                     {isTreasurer && (

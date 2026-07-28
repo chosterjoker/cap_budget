@@ -320,6 +320,27 @@ export async function addWeek(semesterId: string, startDate: string, label?: str
 
 export async function updateUserRole(userId: string, role: "TREASURER" | "OFFICER") {
   await requireTreasurer();
+
+  // Settings — including this control — is treasurer-only, so demoting the last
+  // treasurer would lock every remaining user out of role management with no
+  // way back in through the UI.
+  if (role === "OFFICER") {
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (target?.role === "TREASURER") {
+      const treasurers = await prisma.user.count({
+        where: { role: "TREASURER" },
+      });
+      if (treasurers <= 1) {
+        throw new Error(
+          "Promote another treasurer before stepping down — the club must always have one."
+        );
+      }
+    }
+  }
+
   await prisma.user.update({ where: { id: userId }, data: { role } });
   revalidatePath("/settings");
 }

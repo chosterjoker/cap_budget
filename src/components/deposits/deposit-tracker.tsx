@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile, StatRow } from "@/components/common/stat-tile";
+import { EmptyRow } from "@/components/common/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -90,53 +92,24 @@ export function DepositTracker({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Semester Budget
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatCurrency(totalBudget)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Total Deposited
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatCurrency(totalDeposited)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Total Spent
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatCurrency(totalSpent)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Est. Bank Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-emerald-600">
-              {formatCurrency(actualBankBalance)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Opening + deposited − cleared checks
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <StatRow>
+        <StatTile
+          label="Semester budget"
+          value={formatCurrency(totalBudget)}
+        />
+        <StatTile
+          label="Total deposited"
+          value={formatCurrency(totalDeposited)}
+          hint={`${deposits.length} ${deposits.length === 1 ? "deposit" : "deposits"} recorded`}
+        />
+        <StatTile label="Total spent" value={formatCurrency(totalSpent)} />
+        <StatTile
+          label="Est. bank balance"
+          value={formatCurrency(actualBankBalance)}
+          hint="Opening + deposited − cleared checks"
+          tone={actualBankBalance < 0 ? "danger" : "success"}
+        />
+      </StatRow>
 
       {isTreasurer && (
         <Card>
@@ -185,7 +158,7 @@ export function DepositTracker({
               <TableRow key={d.id}>
                 <TableCell>{formatDate(d.date)}</TableCell>
                 <TableCell>{d.notes || "—"}</TableCell>
-                <TableCell className="text-right font-mono">
+                <TableCell className="text-right tabular-nums">
                   {formatCurrency(d.amount)}
                 </TableCell>
                 {isTreasurer && (
@@ -211,6 +184,13 @@ export function DepositTracker({
                 )}
               </TableRow>
             ))}
+            {deposits.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={isTreasurer ? 4 : 3}>
+                  <EmptyRow>No deposits recorded yet.</EmptyRow>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

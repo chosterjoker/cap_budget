@@ -486,7 +486,7 @@ export function ReimbursementManager({
                       <p className="font-medium">{r.name}</p>
                       {r.tags && <p className="text-xs text-muted-foreground">{r.tags}</p>}
                       {parsed && (
-                        <p className="text-xs text-emerald-600">
+                        <p className="text-xs text-success-fg">
                           OCR: {parsed.vendor && `${parsed.vendor} · `}
                           {parsed.amount && formatCurrency(parsed.amount)}
                         </p>
@@ -500,7 +500,7 @@ export function ReimbursementManager({
                   <TableCell>{r.category?.name ?? "—"}</TableCell>
                   <TableCell>{r.event?.name ?? "—"}</TableCell>
                   <TableCell>{formatDate(r.date)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
+                  <TableCell className="text-right tabular-nums font-semibold">
                     {formatCurrency(r.amount)}
                   </TableCell>
                   <TableCell>
@@ -669,12 +669,12 @@ function CreateReimbursementForm({
         <label
           htmlFor="receipt-upload"
           className={`flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-3 text-sm transition-colors hover:bg-muted/50 ${
-            fileName ? "border-emerald-500/50 bg-emerald-500/5" : "border-input"
+            fileName ? "border-success/50 bg-success-muted" : "border-input"
           }`}
         >
           <span
             className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${
-              fileName ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
+              fileName ? "bg-success-muted text-success-fg" : "bg-muted text-muted-foreground"
             }`}
           >
             {scan === "scanning" ? (
@@ -704,17 +704,17 @@ function CreateReimbursementForm({
           </p>
         )}
         {scan === "done" && (
-          <p className="flex items-center gap-1.5 text-xs text-emerald-600">
+          <p className="flex items-center gap-1.5 text-xs text-success-fg">
             <Sparkles className="h-3 w-3" /> Auto-filled from receipt — review before submitting.
           </p>
         )}
         {scan === "empty" && (
-          <p className="text-xs text-amber-600">
+          <p className="text-xs text-warning-fg">
             Couldn&apos;t read the receipt. Enter the details manually.
           </p>
         )}
         {scan === "error" && (
-          <p className="text-xs text-amber-600">
+          <p className="text-xs text-warning-fg">
             Scan failed. Enter the details manually.
           </p>
         )}

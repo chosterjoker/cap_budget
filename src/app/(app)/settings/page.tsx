@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getActiveSemester } from "@/lib/semester";
 import { prisma } from "@/lib/prisma";
 import { SettingsManager } from "@/components/settings/settings-manager";
+import { PageHeader } from "@/components/common/page-header";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -30,12 +31,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Settings</h2>
-        <p className="text-muted-foreground">
-          Semesters, categories, weeks, and user roles
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Semesters, categories, weeks, and user roles"
+      />
       <SettingsManager
         semesters={semesters}
         activeSemester={activeSemester}

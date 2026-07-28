@@ -8,12 +8,16 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
-  LineChart,
-  Line,
+  ReferenceLine,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrencyShort } from "@/lib/format";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { formatCurrency, formatCurrencyShort } from "@/lib/format";
 
 /**
  * Measures its own box with a ResizeObserver and renders the chart with
@@ -47,79 +51,102 @@ function ChartFrame({
   );
 }
 
-export function CategorySpendingChart({
-  data,
+type WeekPoint = { week: string; label: string | null; spent: number };
+
+function WeekTooltip({
+  active,
+  payload,
 }: {
-  data: { name: string; budget: number; spent: number }[];
+  active?: boolean;
+  payload?: { payload: WeekPoint }[];
 }) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload;
   return (
-    <Card>
+    <div className="rounded-lg bg-popover px-3 py-2 text-xs shadow-md ring-1 ring-foreground/10">
+      <p className="font-medium">{point.label || point.week}</p>
+      <p className="mt-0.5 tabular-nums text-muted-foreground">
+        {formatCurrency(point.spent)} spent
+      </p>
+    </div>
+  );
+}
+
+export function WeeklySpendingChart({ data }: { data: WeekPoint[] }) {
+  const spentWeeks = data.filter((d) => d.spent > 0);
+  const average = spentWeeks.length
+    ? spentWeeks.reduce((s, d) => s + d.spent, 0) / spentWeeks.length
+    : 0;
+  const peak = data.reduce<WeekPoint | null>(
+    (best, d) => (!best || d.spent > best.spent ? d : best),
+    null
+  );
+
+  return (
+    <Card className="h-full">
       <CardHeader>
-        <CardTitle>Spending by Category</CardTitle>
+        <CardTitle>Weekly spending</CardTitle>
+        <CardDescription>
+          {peak && peak.spent > 0 ? (
+            <>
+              Peak {peak.label || peak.week} at {formatCurrency(peak.spent)} ·
+              averaging {formatCurrency(average)} per active week
+            </>
+          ) : (
+            "No spending recorded yet"
+          )}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="h-80">
+      {/* Height covers the plot plus the x-axis band, so the labels are never
+          cut off into a nested scrollbar. */}
+      <CardContent className="h-64">
         <ChartFrame>
           {({ width, height }) => (
             <BarChart
               width={width}
               height={height}
               data={data}
-              margin={{ top: 8, right: 8, left: 0, bottom: 60 }}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
             >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <CartesianGrid
+                vertical={false}
+                stroke="var(--chart-grid)"
+                strokeWidth={1}
+              />
               <XAxis
-                dataKey="name"
-                angle={-35}
-                textAnchor="end"
-                height={80}
-                tick={{ fontSize: 11 }}
+                dataKey="week"
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+                minTickGap={8}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               />
-              <YAxis tickFormatter={(v) => formatCurrencyShort(v as number)} width={56} />
-              <Tooltip formatter={(v) => `$${Number(v).toLocaleString()}`} />
-              <Legend />
-              <Bar dataKey="budget" name="Budget" fill="var(--chart-2)" />
-              <Bar dataKey="spent" name="Spent" fill="var(--chart-1)" />
-            </BarChart>
-          )}
-        </ChartFrame>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function WeeklySpendingChart({
-  data,
-}: {
-  data: { week: string; label: string | null; spent: number }[];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Weekly Spending</CardTitle>
-      </CardHeader>
-      <CardContent className="h-80">
-        <ChartFrame>
-          {({ width, height }) => (
-            <LineChart width={width} height={height} data={data}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="week" />
-              <YAxis tickFormatter={(v) => formatCurrencyShort(v as number)} width={56} />
+              <YAxis
+                tickFormatter={(v) => formatCurrencyShort(v as number)}
+                tickLine={false}
+                axisLine={false}
+                width={52}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              />
               <Tooltip
-                formatter={(v) => `$${Number(v).toLocaleString()}`}
-                labelFormatter={(_, payload) => {
-                  const item = payload?.[0]?.payload as { label?: string | null };
-                  return item?.label || _;
-                }}
+                content={<WeekTooltip />}
+                cursor={{ fill: "var(--muted)", opacity: 0.6 }}
               />
-              <Line
-                type="monotone"
+              {average > 0 && (
+                <ReferenceLine
+                  y={average}
+                  stroke="var(--muted-foreground)"
+                  strokeWidth={1}
+                />
+              )}
+              <Bar
                 dataKey="spent"
                 name="Spent"
-                stroke="var(--chart-1)"
-                strokeWidth={2}
-                dot={{ r: 4 }}
+                fill="var(--chart-1)"
+                maxBarSize={24}
+                radius={[4, 4, 0, 0]}
               />
-            </LineChart>
+            </BarChart>
           )}
         </ChartFrame>
       </CardContent>

@@ -175,6 +175,7 @@ export async function getDashboardStats(semesterId: string) {
       budget.totalBudget + (venmo._sum.amount ?? 0) - budget.totalSpent,
     unclearedChecks: unclearedChecks.length,
     unclearedAmount,
+    clearedAmount,
     pendingReimbursements,
     pendingCount: reimbursements.length,
     // Cash position

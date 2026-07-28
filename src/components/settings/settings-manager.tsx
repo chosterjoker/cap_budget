@@ -6,7 +6,14 @@ import { createSemester, updateUserRole, addCategory, updateCategory, deleteCate
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Meter } from "@/components/common/meter";
 import {
   Select,
   SelectContent,
@@ -71,17 +78,6 @@ export function SettingsManager({
   users: User[];
 }) {
   const router = useRouter();
-  const [budgetTarget, setBudgetTarget] = useState(
-    String(activeSemester?.totalBudget ?? 0)
-  );
-  const [budgetSaving, setBudgetSaving] = useState(false);
-  const [openingBank, setOpeningBank] = useState(
-    String(activeSemester?.openingBankBalance ?? 0)
-  );
-  const [openingUndep, setOpeningUndep] = useState(
-    String(activeSemester?.openingUndeposited ?? 0)
-  );
-  const [openingSaving, setOpeningSaving] = useState(false);
 
   async function handleNewSemester(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -104,39 +100,6 @@ export function SettingsManager({
       router.refresh();
     } catch {
       toast.error("Failed to create semester");
-    }
-  }
-
-  async function saveOpeningBalances() {
-    if (!activeSemester) return;
-    setOpeningSaving(true);
-    try {
-      await updateOpeningBalances(activeSemester.id, {
-        openingBankBalance: parseFloat(openingBank) || 0,
-        openingUndeposited: parseFloat(openingUndep) || 0,
-      });
-      toast.success("Opening balances updated");
-      router.refresh();
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to update opening balances"
-      );
-    } finally {
-      setOpeningSaving(false);
-    }
-  }
-
-  async function saveBudget() {
-    if (!activeSemester) return;
-    setBudgetSaving(true);
-    try {
-      await updateSemesterBudget(activeSemester.id, parseFloat(budgetTarget) || 0);
-      toast.success("Budget updated");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update budget");
-    } finally {
-      setBudgetSaving(false);
     }
   }
 
@@ -200,42 +163,14 @@ export function SettingsManager({
       </Card>
 
       {activeSemester && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Opening balances — {activeSemester.name}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Carried over from last semester. Drive the computed cash position
-              on the dashboard.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="space-y-1">
-                <Label>Opening bank balance</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={openingBank}
-                  onChange={(e) => setOpeningBank(e.target.value)}
-                  className="w-44"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Opening undeposited</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={openingUndep}
-                  onChange={(e) => setOpeningUndep(e.target.value)}
-                  className="w-44"
-                />
-              </div>
-              <Button onClick={saveOpeningBalances} disabled={openingSaving}>
-                {openingSaving ? "Saving…" : "Save"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        // Keyed on the semester id so switching or creating a semester remounts
+        // the form with that semester's numbers. Without the key the inputs keep
+        // the previous semester's values and Save would write them onto the new one.
+        <OpeningBalancesCard
+          key={activeSemester.id}
+          semester={activeSemester}
+          onSaved={() => router.refresh()}
+        />
       )}
 
       <Card>
@@ -312,54 +247,12 @@ export function SettingsManager({
             <CardTitle>Categories — {activeSemester.name}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Total budget
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={budgetTarget}
-                      onChange={(e) => setBudgetTarget(e.target.value)}
-                      className="h-9 w-40 font-mono text-lg"
-                    />
-                    <Button
-                      size="sm"
-                      disabled={
-                        budgetSaving ||
-                        budgetTarget === String(activeSemester.totalBudget)
-                      }
-                      onClick={saveBudget}
-                    >
-                      Save
-                    </Button>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Allocated
-                  </p>
-                  <p className="text-2xl font-bold font-mono">
-                    {formatCurrency(allocatedTotal)}
-                  </p>
-                </div>
-              </div>
-              <p
-                className={cn(
-                  "mt-2 text-sm font-medium",
-                  allocatedTotal > activeSemester.totalBudget
-                    ? "text-destructive"
-                    : "text-muted-foreground"
-                )}
-              >
-                {allocatedTotal > activeSemester.totalBudget
-                  ? `Over budget by ${formatCurrency(allocatedTotal - activeSemester.totalBudget)}`
-                  : `${formatCurrency(activeSemester.totalBudget - allocatedTotal)} left to allocate`}
-              </p>
-            </div>
+            <BudgetTargetPanel
+              key={activeSemester.id}
+              semester={activeSemester}
+              allocatedTotal={allocatedTotal}
+              onSaved={() => router.refresh()}
+            />
             <form
               className="flex flex-wrap gap-2"
               onSubmit={async (e) => {
@@ -459,10 +352,26 @@ export function SettingsManager({
                   <TableCell>{u.email}</TableCell>
                   <TableCell>
                     <Select
-                      defaultValue={u.role}
+                      value={u.role}
                       items={{ TREASURER: "Treasurer", OFFICER: "Officer" }}
                       onValueChange={async (role) => {
-                        await updateUserRole(u.id, role as Role);
+                        if (!role || role === u.role) return;
+                        try {
+                          await updateUserRole(u.id, role as Role);
+                          toast.success(
+                            `${u.name || u.email} is now ${
+                              role === "TREASURER" ? "treasurer" : "an officer"
+                            }`
+                          );
+                        } catch (err) {
+                          toast.error(
+                            err instanceof Error
+                              ? err.message
+                              : "Failed to change role"
+                          );
+                        }
+                        // Refresh either way so a rejected change snaps back to
+                        // the role the server actually holds.
                         router.refresh();
                       }}
                     >
@@ -485,6 +394,159 @@ export function SettingsManager({
   );
 }
 
+function OpeningBalancesCard({
+  semester,
+  onSaved,
+}: {
+  semester: Semester;
+  onSaved: () => void;
+}) {
+  const [bank, setBank] = useState(String(semester.openingBankBalance));
+  const [undeposited, setUndeposited] = useState(
+    String(semester.openingUndeposited)
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await updateOpeningBalances(semester.id, {
+        openingBankBalance: parseFloat(bank) || 0,
+        openingUndeposited: parseFloat(undeposited) || 0,
+      });
+      toast.success("Opening balances updated");
+      onSaved();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update opening balances"
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Opening balances — {semester.name}</CardTitle>
+        <CardDescription>
+          Carried over from last semester. These drive the computed cash
+          position on the dashboard.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-1">
+            <Label>Opening bank balance</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={bank}
+              onChange={(e) => setBank(e.target.value)}
+              className="w-44 tabular-nums"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Opening undeposited</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={undeposited}
+              onChange={(e) => setUndeposited(e.target.value)}
+              className="w-44 tabular-nums"
+            />
+          </div>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BudgetTargetPanel({
+  semester,
+  allocatedTotal,
+  onSaved,
+}: {
+  semester: Semester;
+  allocatedTotal: number;
+  onSaved: () => void;
+}) {
+  const [target, setTarget] = useState(String(semester.totalBudget));
+  const [saving, setSaving] = useState(false);
+  const over = allocatedTotal > semester.totalBudget;
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-1">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Total budget
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              step="0.01"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              className="h-9 w-40 tabular-nums text-lg"
+            />
+            <Button
+              size="sm"
+              disabled={saving || target === String(semester.totalBudget)}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  await updateSemesterBudget(
+                    semester.id,
+                    parseFloat(target) || 0
+                  );
+                  toast.success("Budget updated");
+                  onSaved();
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : "Failed to update budget"
+                  );
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Allocated
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">
+            {formatCurrency(allocatedTotal)}
+          </p>
+        </div>
+      </div>
+      <Meter
+        className="mt-3"
+        value={allocatedTotal}
+        max={semester.totalBudget}
+        tone={over ? "danger" : "accent"}
+      />
+      <p
+        className={cn(
+          "mt-2 text-sm font-medium",
+          over ? "text-danger-fg" : "text-muted-foreground"
+        )}
+      >
+        {over
+          ? `Over budget by ${formatCurrency(allocatedTotal - semester.totalBudget)}`
+          : `${formatCurrency(semester.totalBudget - allocatedTotal)} left to allocate`}
+      </p>
+    </div>
+  );
+}
+
 function CategoryRow({ category, onSaved }: { category: Category; onSaved: () => void }) {
   const [name, setName] = useState(category.name);
   const [amount, setAmount] = useState(String(category.allocatedAmount));
@@ -502,7 +564,7 @@ function CategoryRow({ category, onSaved }: { category: Category; onSaved: () =>
           onChange={(e) => setAmount(e.target.value)}
           type="number"
           step="0.01"
-          className="h-8 text-right font-mono"
+          className="h-8 text-right tabular-nums"
         />
       </TableCell>
       <TableCell>
@@ -560,7 +622,7 @@ function WeekRow({ week, onSaved }: { week: Week; onSaved: () => void }) {
 
   return (
     <TableRow>
-      <TableCell className="font-mono text-sm">W{week.weekNumber}</TableCell>
+      <TableCell className="tabular-nums text-sm">W{week.weekNumber}</TableCell>
       <TableCell className="text-sm text-muted-foreground">
         {formatDate(week.startDate)}
       </TableCell>

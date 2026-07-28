@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Meter } from "@/components/common/meter";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { PaymentMethod } from "@prisma/client";
@@ -74,7 +75,6 @@ export function BudgetGrid({
   totalSpent: number;
   totalRemaining: number;
   percentRemaining: number;
-  isTreasurer: boolean;
   paymentMethods: { value: PaymentMethod; label: string }[];
 }) {
   const router = useRouter();
@@ -105,20 +105,48 @@ export function BudgetGrid({
     }
   }
 
+  // Severity of a category's remaining budget, on the same status scale the
+  // dashboard meters use.
   function cellColor(percent: number) {
-    if (percent < 0) return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
-    if (percent < 20) return "bg-red-50 text-red-700 dark:bg-red-950/50";
-    if (percent < 40) return "bg-amber-50 text-amber-800 dark:bg-amber-950/50";
+    if (percent < 0) return "bg-danger-muted font-semibold text-danger-fg";
+    if (percent < 20) return "bg-danger-muted text-danger-fg";
+    if (percent < 40) return "bg-warning-muted text-warning-fg";
     return "";
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm text-muted-foreground">
-          Total: {formatCurrency(totalBudget)} · Spent: {formatCurrency(totalSpent)}{" "}
-          · Remaining: {formatCurrency(totalRemaining)} (
-          {formatPercent(percentRemaining)})
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-64 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="font-medium tabular-nums">
+              {formatCurrency(totalSpent)}
+            </span>
+            <span className="text-muted-foreground">
+              of {formatCurrency(totalBudget)} spent
+            </span>
+            <span
+              className={cn(
+                "ml-auto tabular-nums",
+                totalRemaining < 0 ? "text-danger-fg" : "text-muted-foreground"
+              )}
+            >
+              {formatCurrency(totalRemaining)} left (
+              {formatPercent(percentRemaining)})
+            </span>
+          </div>
+          <Meter
+            className="mt-2"
+            value={totalSpent}
+            max={totalBudget}
+            tone={
+              totalRemaining < 0
+                ? "danger"
+                : percentRemaining < 15
+                  ? "warning"
+                  : "accent"
+            }
+          />
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger
@@ -259,16 +287,16 @@ export function BudgetGrid({
                 <td className={cn(FROZEN.cat, "bg-background px-3 py-2 font-medium")}>
                   {row.category.name}
                 </td>
-                <td className={cn(FROZEN.budget, "bg-background px-2 py-2 text-right font-mono")}>
+                <td className={cn(FROZEN.budget, "bg-background px-2 py-2 text-right tabular-nums")}>
                   {formatCurrency(row.category.allocatedAmount)}
                 </td>
-                <td className={cn(FROZEN.spent, "bg-background px-2 py-2 text-right font-mono")}>
+                <td className={cn(FROZEN.spent, "bg-background px-2 py-2 text-right tabular-nums")}>
                   {formatCurrency(row.spent)}
                 </td>
                 <td
                   className={cn(
                     FROZEN.pct,
-                    "bg-background px-2 py-2 text-right font-mono",
+                    "bg-background px-2 py-2 text-right tabular-nums",
                     cellColor(row.percentRemaining)
                   )}
                 >
@@ -278,7 +306,7 @@ export function BudgetGrid({
                   <td
                     key={wi}
                     className={cn(
-                      "cursor-pointer px-2 py-2 text-right font-mono hover:bg-primary/10",
+                      "cursor-pointer px-2 py-2 text-right tabular-nums hover:bg-primary/10",
                       amt > 0 && "font-semibold"
                     )}
                     onClick={() => {
@@ -296,17 +324,17 @@ export function BudgetGrid({
             ))}
             <tr className="bg-muted/50 font-semibold">
               <td className={cn(FROZEN.cat, "bg-muted px-3 py-2")}>Total</td>
-              <td className={cn(FROZEN.budget, "bg-muted px-2 py-2 text-right font-mono")}>
+              <td className={cn(FROZEN.budget, "bg-muted px-2 py-2 text-right tabular-nums")}>
                 {formatCurrency(totalBudget)}
               </td>
-              <td className={cn(FROZEN.spent, "bg-muted px-2 py-2 text-right font-mono")}>
+              <td className={cn(FROZEN.spent, "bg-muted px-2 py-2 text-right tabular-nums")}>
                 {formatCurrency(totalSpent)}
               </td>
-              <td className={cn(FROZEN.pct, "bg-muted px-2 py-2 text-right font-mono")}>
+              <td className={cn(FROZEN.pct, "bg-muted px-2 py-2 text-right tabular-nums")}>
                 {formatPercent(percentRemaining)}
               </td>
               {weekTotals.map((t, i) => (
-                <td key={i} className="px-2 py-2 text-right font-mono">
+                <td key={i} className="px-2 py-2 text-right tabular-nums">
                   {t > 0 ? formatCurrency(t) : "—"}
                 </td>
               ))}
