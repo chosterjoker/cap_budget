@@ -157,6 +157,13 @@ export function CheckManager({
   }, [filtered, sortKey, sortDir]);
 
   const total = filtered.reduce((s, c) => s + c.amount, 0);
+  const hasActiveFilters =
+    search !== "" ||
+    sinceDate !== "" ||
+    categoryFilter !== "all" ||
+    eventFilter !== "all" ||
+    methodFilter !== "all" ||
+    statusFilter !== "all";
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -255,120 +262,45 @@ export function CheckManager({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Search check #, description, recipient, memo…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          className="w-full sm:max-w-xs"
         />
-        <div className="space-y-1">
-          <Input
-            type="date"
-            value={sinceDate}
-            onChange={(e) => setSinceDate(e.target.value)}
-            aria-label="Since date"
-          />
-          <p className="text-[10px] text-muted-foreground">Show on or after</p>
-        </div>
-        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? "all")}>
-          <SelectTrigger>
-            <SelectValue>
-              {categoryFilter === "all"
-                ? "All categories"
-                : categories.find((c) => c.id === categoryFilter)?.name ?? "All categories"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={eventFilter} onValueChange={(v) => setEventFilter(v ?? "all")}>
-          <SelectTrigger>
-            <SelectValue>
-              {eventFilter === "all"
-                ? "All events"
-                : events.find((e) => e.id === eventFilter)?.name ?? "All events"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All events</SelectItem>
-            {events.map((e) => (
-              <SelectItem key={e.id} value={e.id}>
-                {e.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={methodFilter} onValueChange={(v) => setMethodFilter(v ?? "all")}>
-          <SelectTrigger>
-            <SelectValue>
-              {methodFilter === "all"
-                ? "All methods"
-                : PAYMENT_LABELS[methodFilter as PaymentMethod] ?? "All methods"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All methods</SelectItem>
-            {Object.entries(PAYMENT_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>
-                {v}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter((v ?? "all") as typeof statusFilter)}>
-          <SelectTrigger>
-            <SelectValue>
-              {statusFilter === "all"
-                ? "All status"
-                : statusFilter === "cleared"
-                  ? "Cleared"
-                  : "Uncleared"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            <SelectItem value="cleared">Cleared</SelectItem>
-            <SelectItem value="uncleared">Uncleared</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex items-center justify-between gap-2 sm:col-span-2">
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} of {checks.length} · {formatCurrency(total)}
-          </p>
-          <div className="flex gap-2">
+        <p className="text-sm text-muted-foreground">
+          {filtered.length} of {checks.length} · {formatCurrency(total)}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {hasActiveFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               Clear filters
             </Button>
-            {isTreasurer && ocrEnabled && (
-              <ScanChecksDialog
-                semesterId={semesterId}
-                categories={categories}
-                events={events}
-              />
-            )}
-            {isTreasurer && (
-              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogTrigger render={<Button size="sm">New check / payment</Button>} />
-                <DialogContent className="max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Record payment</DialogTitle>
-                  </DialogHeader>
-                  <CheckForm
-                    onSubmit={handleCreate}
-                    categories={categories}
-                    events={events}
-                    reimbursements={reimbursements}
-                  />
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
+          )}
+          {isTreasurer && ocrEnabled && (
+            <ScanChecksDialog
+              semesterId={semesterId}
+              categories={categories}
+              events={events}
+            />
+          )}
+          {isTreasurer && (
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger render={<Button size="sm">New check / payment</Button>} />
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Record payment</DialogTitle>
+                </DialogHeader>
+                <CheckForm
+                  onSubmit={handleCreate}
+                  categories={categories}
+                  events={events}
+                  reimbursements={reimbursements}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -386,6 +318,110 @@ export function CheckManager({
               {sortHeader("amount", "Amount", "right")}
               {sortHeader("cleared", "Cleared?")}
               {isTreasurer && <TableHead />}
+            </TableRow>
+            <TableRow className="bg-muted/20 hover:bg-transparent">
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5">
+                <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? "all")}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${categoryFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {categoryFilter === "all"
+                        ? "All"
+                        : categories.find((c) => c.id === categoryFilter)?.name ?? "All"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All categories</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="h-auto py-1.5">
+                <Select value={eventFilter} onValueChange={(v) => setEventFilter(v ?? "all")}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${eventFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {eventFilter === "all"
+                        ? "All"
+                        : events.find((e) => e.id === eventFilter)?.name ?? "All"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All events</SelectItem>
+                    {events.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="h-auto py-1.5">
+                <Select value={methodFilter} onValueChange={(v) => setMethodFilter(v ?? "all")}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${methodFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {methodFilter === "all"
+                        ? "All"
+                        : PAYMENT_LABELS[methodFilter as PaymentMethod] ?? "All"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All methods</SelectItem>
+                    {Object.entries(PAYMENT_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="h-auto py-1.5">
+                <Input
+                  type="date"
+                  value={sinceDate}
+                  onChange={(e) => setSinceDate(e.target.value)}
+                  aria-label="Show checks on or after this date"
+                  title="Show checks on or after this date"
+                  className="h-7 font-normal"
+                />
+              </TableHead>
+              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5">
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter((v ?? "all") as typeof statusFilter)}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${statusFilter === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {statusFilter === "all"
+                        ? "All"
+                        : statusFilter === "cleared"
+                          ? "Cleared"
+                          : "Uncleared"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All status</SelectItem>
+                    <SelectItem value="cleared">Cleared</SelectItem>
+                    <SelectItem value="uncleared">Uncleared</SelectItem>
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              {isTreasurer && <TableHead className="h-auto py-1.5" />}
             </TableRow>
           </TableHeader>
           <TableBody>
