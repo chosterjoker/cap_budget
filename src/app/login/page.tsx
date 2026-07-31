@@ -2,13 +2,6 @@ import { auth, signIn } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -21,26 +14,42 @@ export default async function LoginPage() {
   if (session?.user) redirect("/");
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-muted/40 p-6">
+      <div className="grid w-full max-w-3xl overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-foreground/10 lg:min-h-[24rem] lg:grid-cols-2">
+        {/* First in the DOM so it sits above the form on narrow screens;
+            `order` moves it to the right column once the split kicks in. */}
+        <div className="relative h-28 sm:h-36 lg:order-last lg:h-auto">
           <Image
-            src="/cap_logo.png"
-            alt="Cap & Gown crest"
-            width={1068}
-            height={1374}
+            src="/capandgown.webp"
+            alt="The Cap & Gown clubhouse at dusk"
+            fill
             priority
-            className="mx-auto mb-2 h-16 w-auto"
+            sizes="(min-width: 1024px) 384px, 100vw"
+            // The short mobile band would otherwise crop to roofline; bias it
+            // down to the lit pavilion. The tall desktop column needs no bias.
+            className="object-cover object-[50%_72%] lg:object-center"
           />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Cap & Gown
-          </p>
-          <CardTitle className="text-2xl">Budget & Tracking</CardTitle>
-          <CardDescription>
-            Sign in to manage semester budgets, checks, and reimbursements.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+
+        <div className="flex flex-col justify-center gap-6 p-8 sm:p-10">
+          <div>
+            <Image
+              src="/cap_logo.png"
+              alt="Cap & Gown crest"
+              width={1068}
+              height={1374}
+              priority
+              className="mb-4 h-10 w-auto"
+            />
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Cap &amp; Gown
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold">Budget &amp; Tracking</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Sign in to manage semester budgets, checks, and reimbursements.
+            </p>
+          </div>
+
           {hasGoogle ? (
             <form
               action={async () => {
@@ -81,13 +90,17 @@ export default async function LoginPage() {
               <Button type="submit" className="w-full">
                 Dev sign in
               </Button>
-              <p className="text-center text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Dev mode: configure Google OAuth in production.
               </p>
             </form>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Cap &amp; Gown Club &middot; Treasury
+      </p>
     </div>
   );
 }
