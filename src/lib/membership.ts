@@ -8,6 +8,7 @@ import type { StatTone } from "@/components/common/stat-tile";
  */
 export const MEMBERSHIP_STATUSES: MembershipStatus[] = [
   "NOT_BILLED",
+  "FORM_SUBMITTED",
   "BILLED",
   "AWAITING_PAYMENT",
   "PAID_HALF",
@@ -17,6 +18,7 @@ export const MEMBERSHIP_STATUSES: MembershipStatus[] = [
 
 export const MEMBERSHIP_LABELS: Record<MembershipStatus, string> = {
   NOT_BILLED: "Not billed",
+  FORM_SUBMITTED: "Form submitted",
   BILLED: "Billed",
   AWAITING_PAYMENT: "Waiting on payment",
   PAID_HALF: "Paid half",
@@ -27,6 +29,7 @@ export const MEMBERSHIP_LABELS: Record<MembershipStatus, string> = {
 /** Badge styling per status, using the semantic status tokens only. */
 export const MEMBERSHIP_BADGE: Record<MembershipStatus, string> = {
   NOT_BILLED: "bg-muted text-muted-foreground",
+  FORM_SUBMITTED: "bg-muted text-muted-foreground",
   BILLED: "bg-muted text-muted-foreground",
   AWAITING_PAYMENT: "bg-warning-muted text-warning-fg",
   PAID_HALF: "bg-warning-muted text-warning-fg",

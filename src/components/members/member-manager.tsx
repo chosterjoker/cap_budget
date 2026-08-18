@@ -408,10 +408,18 @@ export function MemberManager({
             </form>
           )}
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X className="h-3.5 w-3.5" />
-              Clear filters
-            </Button>
+            <div className="flex items-center gap-2 pb-1">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground tabular-nums">
+                  {filtered.length}
+                </span>{" "}
+                of {members.length}
+              </p>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X className="h-3.5 w-3.5" />
+                Clear filters
+              </Button>
+            </div>
           )}
         </div>
 

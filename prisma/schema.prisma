@@ -33,6 +33,7 @@ enum ReimbursementStatus {
 // this order for sorting, so keep the two in step.
 enum MembershipStatus {
   NOT_BILLED
+  FORM_SUBMITTED
   BILLED
   AWAITING_PAYMENT
   PAID_HALF
