@@ -28,6 +28,18 @@ enum ReimbursementStatus {
   PAID
 }
 
+// Dues lifecycle for a member in one semester. Ordered from "owes everything"
+// to "owes nothing" — `membershipStatusOrder` in src/lib/membership.ts mirrors
+// this order for sorting, so keep the two in step.
+enum MembershipStatus {
+  NOT_BILLED
+  BILLED
+  AWAITING_PAYMENT
+  PAID_HALF
+  PAID_FULL
+  WAIVED
+}
+
 model User {
   id             String          @id @default(cuid())
   email          String          @unique
@@ -85,6 +97,7 @@ model Semester {
   isActive           Boolean           @default(false)
   openingBankBalance Float             @default(0)
   openingUndeposited Float             @default(0)
+  duesAmount         Float             @default(0)
   previousSemesterId String?
   previousSemester   Semester?         @relation("SemesterCarryover", fields: [previousSemesterId], references: [id])
   nextSemesters      Semester[]        @relation("SemesterCarryover")
@@ -98,6 +111,7 @@ model Semester {
   reconciliations    BankReconciliation[]
   venmoIncomes       VenmoIncome[]
   events             Event[]
+  members            Member[]
 }
 
 model BudgetCategory {
@@ -249,4 +263,27 @@ model Event {
   reimbursements  Reimbursement[]
 
   @@unique([semesterId, date, name])
+}
+
+// The club roster for one semester, plus where each member stands on dues.
+// Semester-scoped like every other entity here: a roster is re-imported each
+// term, and `status` / `amountPaid` only mean anything relative to a semester.
+model Member {
+  id         String           @id @default(cuid())
+  semesterId String
+  name       String
+  email      String?
+  classYear  Int?
+  status     MembershipStatus @default(NOT_BILLED)
+  amountPaid Float            @default(0)
+  notes      String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  semester   Semester         @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  // The CSV upsert key. Email is nullable so a member can be added by hand
+  // without one; Postgres treats NULLs as distinct, so several email-less
+  // members coexist fine. The import only upserts rows that *have* an email.
+  @@unique([semesterId, email])
+  @@index([semesterId])
 }

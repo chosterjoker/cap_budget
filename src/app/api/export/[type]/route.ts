@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getBudgetGridData } from "@/lib/budget-data";
 import { getActiveSemester } from "@/lib/semester";
+import { MEMBERSHIP_LABELS, duesOwedFor } from "@/lib/membership";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +168,44 @@ export async function GET(
     }
     csv = lines.join("\n");
     filename = "deposits.csv";
+  } else if (type === "members") {
+    const members = await prisma.member.findMany({
+      where: { semesterId },
+      orderBy: [{ classYear: "asc" }, { name: "asc" }],
+    });
+    const semester = await prisma.semester.findUnique({
+      where: { id: semesterId },
+      select: { duesAmount: true },
+    });
+    const duesAmount = semester?.duesAmount ?? 0;
+    const headers = [
+      "Name",
+      "Email",
+      "Class Year",
+      "Status",
+      "Amount Paid",
+      "Balance",
+      "Notes",
+    ];
+    const lines = [headers.map(csvEscape).join(",")];
+    for (const m of members) {
+      const owed = duesOwedFor(m.status, duesAmount);
+      lines.push(
+        [
+          m.name,
+          m.email ?? "",
+          m.classYear ?? "",
+          MEMBERSHIP_LABELS[m.status],
+          m.amountPaid,
+          Math.max(owed - m.amountPaid, 0),
+          m.notes ?? "",
+        ]
+          .map(csvEscape)
+          .join(",")
+      );
+    }
+    csv = lines.join("\n");
+    filename = "members.csv";
   } else {
     return NextResponse.json({ error: "Unknown export type" }, { status: 400 });
   }

@@ -23,6 +23,7 @@ Living doc for the non-obvious parts. Keep terse — code is the source of truth
 - **Reimbursements** carry `categoryId` + `eventId` + `officerId` and a nullable `checkId` (the settlement check).
 - **Checks** carry `categoryId` + `eventId` and a `reimbursements` back-relation. A check with reimbursements is a *settlement* and skips the Expense write.
 - **Events** are unique on `(semesterId, date, name)` — this is the CSV upsert key. `isInformational` flags non-spending rows.
+- **Members** are the club roster for one semester, unique on `(semesterId, email)` — this is the CSV upsert key. `email` is nullable (hand-added members may not have one); Postgres treats NULLs as distinct so several email-less members coexist. `Semester.duesAmount` is the per-member rate every "owed" figure derives from.
 - **Weeks** are auto-generated from `semester.startDate` (Sunday-aligned via `previousSunday`), every 7 days, up to `endDate` or 16 weeks by default. Only `label` is human-editable.
 
 ## Budget math (the load-bearing part)
@@ -53,8 +54,29 @@ The action `importSocialCalendarCsv` upserts each row by `(semesterId, date, nam
 
 Known-type detection (`Club Night`, `WW Movie Night`, etc.) is by prefix match on the event name — not authoritative, just informational tags.
 
+## CSV import (Membership roster)
+
+`src/lib/csv.ts::parseMembershipCsv` handles a shape the calendar parser doesn't: the membership sheet is **several rosters side by side**, one per class year, under a merged banner row —
+
+```
+Juniors (2028) ,               , Seniors (2027) ,
+Name           , Email Address , Name           , Email Address
+```
+
+It finds the header row, splits it into one *group* per "Name" column (each group running to the next "Name"), and reads the class year from the banner cell within that group's columns. Only the leftmost group may scan further left, for Sheets' leading empty columns. A plain single-table CSV is just the one-group case, and an explicit "Class Year" column inside a group beats the banner. Duplicates across groups are dropped, first occurrence winning.
+
+`importMembershipCsv` matches on email and **only writes `name` + `classYear`** — `status`, `amountPaid` and `notes` are the treasurer's, so re-uploading a corrected sheet never resets someone's payment state. Rows with no email can't be keyed, so they're counted as `skipped` rather than re-inserted on every import.
+
+**Do not turn this back into a per-row `upsert` loop.** 196 upserts against the Supabase pooler took ~45s (one round trip each) — past the serverless request budget. The action instead reads the existing rows once, `createMany`s the new ones, and `UPDATE`s only rows whose name or class year actually changed: ~1.4s for a first import, <1s for an unchanged re-upload.
+
+## Membership dues
+
+`Semester.duesAmount` × every non-`WAIVED` member = expected; `sum(Member.amountPaid)` = collected. `status` is the tracking state (`NOT_BILLED → BILLED → AWAITING_PAYMENT → PAID_HALF → PAID_FULL`, plus `WAIVED`); `amountPaid` is the money. They're deliberately independent — status changes only *pre-fill* the amount (`impliedAmountPaid` in `src/lib/membership.ts`), so an odd partial payment can be typed exactly. `MEMBERSHIP_STATUSES` mirrors the enum's declaration order and is what the status sort uses; keep the two in step.
+
+Dues are **not** part of the budget grid — they're incoming member money, not spend. If they should feed the cash position, that's a deliberate addition to `getDashboardStats`, not an accident of this table.
+
 ## Frontend conventions
-- **Edit-then-Save**: list managers render rows as read-only; an Edit button opens a `Dialog` with a form containing all editable fields (including sensitive ones like `cleared`). No inline toggles.
+- **Edit-then-Save**: list managers render rows as read-only; an Edit button opens a `Dialog` with a form containing all editable fields (including sensitive ones like `cleared`). No inline toggles. *Exception:* `MemberManager` adds row checkboxes + a bulk "set status" bar — marking 100+ members one dialog at a time is the page's whole job. It's still an explicit two-step (select, then Apply), which is what the no-inline-toggles rule is actually protecting against.
 - **Filters + sort + search**: implemented as `useMemo` chains over the in-page dataset (no server-side pagination yet — the semester scoping keeps row counts small). `SortHeader` is a local component in CheckManager / ReimbursementManager; if a third table needs it, lift to `src/components/ui/sort-header.tsx`.
 - **Forms**: native HTML forms with `FormData` parsing, no react-hook-form. Server actions take a `Partial<>` for updates.
 
@@ -90,3 +112,4 @@ So the fix for the Security Advisor's `rls_disabled_in_public` / `sensitive_colu
 - `MenuPrimitive.GroupLabel` requires a `Menu.Group` ancestor. `DropdownMenuLabel` is a plain `div` for that reason — see `src/components/ui/dropdown-menu.tsx`.
 - Prisma `User.emailVerified` is required by `@auth/prisma-adapter`. Don't remove it.
 - The `Cap & Gown Spring 2026 Social Calendar - Sheet1.csv` has two empty leading columns from Google Sheets export. The parser handles this; if you change the CSV source, re-verify column detection still works.
+- Sorting a table by `Member.classYear` must treat `null` as "last", not 0 — `MemberManager` maps it to `Number.MAX_SAFE_INTEGER`.
