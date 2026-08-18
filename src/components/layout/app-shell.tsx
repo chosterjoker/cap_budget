@@ -13,6 +13,7 @@ import {
   Settings,
   Menu,
   CalendarDays,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/reimbursements", label: "Reimbursements", icon: Receipt },
   { href: "/deposits", label: "Deposits", icon: Landmark },
   { href: "/venmo", label: "Venmo", icon: Smartphone },
+  { href: "/members", label: "Membership", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings, treasurerOnly: true },
 ];
 
