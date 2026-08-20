@@ -19,7 +19,14 @@ const OPTIONS = [
  */
 const NOOP_SUBSCRIBE = () => () => {};
 
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({
+  className,
+  showLabels = false,
+}: {
+  className?: string;
+  /** Spells out each option and grows the hit areas — for the mobile drawer. */
+  showLabels?: boolean;
+}) {
   const { theme, setTheme } = useTheme();
   // `false` during SSR and the hydration pass, `true` after — so the server and
   // client agree on the first render and the selection appears once the stored
@@ -51,12 +58,14 @@ export function ThemeToggle({ className }: { className?: string }) {
             title={label}
             onClick={() => setTheme(value)}
             className={cn(
-              "flex h-7 flex-1 items-center justify-center rounded-md text-muted-foreground transition-colors",
+              "flex flex-1 items-center justify-center rounded-md text-muted-foreground transition-colors",
               "hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+              showLabels ? "h-9 gap-1.5 text-sm font-medium" : "h-7",
               active && "bg-background text-foreground shadow-sm"
             )}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className={showLabels ? "h-4 w-4" : "h-3.5 w-3.5"} />
+            {showLabels && label}
           </button>
         );
       })}

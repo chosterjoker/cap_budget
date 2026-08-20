@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -16,8 +17,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { UserMenu } from "@/components/layout/user-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { UserMenu, UserPanel } from "@/components/layout/user-menu";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import type { Role } from "@prisma/client";
 
@@ -36,10 +45,13 @@ function NavLinks({
   pathname,
   role,
   onNavigate,
+  touch = false,
 }: {
   pathname: string;
   role: Role;
   onNavigate?: () => void;
+  /** Roomier rows and icons, for the drawer where these are tapped. */
+  touch?: boolean;
 }) {
   return (
     <nav className="flex flex-col gap-1">
@@ -53,13 +65,14 @@ function NavLinks({
             href={item.href}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-lg px-3 font-medium transition-colors",
+              touch ? "py-2.5 text-[0.95rem]" : "py-2 text-sm",
               active
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className={touch ? "h-5 w-5" : "h-4 w-4"} />
             {item.label}
           </Link>
         );
@@ -78,9 +91,14 @@ export function AppShell({
   semesterName?: string;
 }) {
   const pathname = usePathname();
+  // Controlled so tapping a link closes the drawer — otherwise the new page
+  // renders behind an open sheet.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    // `h-dvh`, not `h-screen`: mobile browsers report `vh` against the tallest
+    // viewport, which pushes the bottom of the layout under the URL bar.
+    <div className="flex h-dvh overflow-hidden bg-background">
       <aside className="hidden w-64 flex-col border-r bg-card p-4 md:flex">
         <div className="mb-8 flex items-center gap-3">
           <Image
@@ -112,48 +130,75 @@ export function AppShell({
 
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile-only. On desktop the sidebar already carries the brand, nav,
-            theme toggle and user menu, so this bar would render empty. */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:hidden">
-          <div className="flex items-center gap-2">
-            <Sheet>
-              <SheetTrigger
-                render={
-                  <Button variant="outline" size="icon">
-                    <Menu className="h-4 w-4" />
-                  </Button>
-                }
-              />
-              <SheetContent side="left" className="w-64">
-                <div className="mb-6 flex items-center gap-2">
-                  <Image
-                    src="/cap_logo.png"
-                    alt="Cap & Gown crest"
-                    width={1068}
-                    height={1374}
-                    className="h-8 w-auto shrink-0"
-                  />
-                  <div>
-                    <h1 className="font-bold leading-tight">Budget & Tracking</h1>
-                    {semesterName && (
-                      <p className="text-xs text-muted-foreground">{semesterName}</p>
-                    )}
-                  </div>
-                </div>
-                <NavLinks pathname={pathname} role={user.role} />
-              </SheetContent>
-            </Sheet>
-            <Image
-              src="/cap_logo.png"
-              alt="Cap & Gown crest"
-              width={1068}
-              height={1374}
-              className="h-6 w-auto"
+            theme toggle and user menu, so this bar would render empty.
+            The bar holds nothing but the menu button and the title: theme and
+            account live at the bottom of the drawer, where there's room for
+            them. */}
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 md:hidden">
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+            <SheetTrigger
+              render={
+                <Button variant="outline" size="icon" aria-label="Open menu">
+                  <Menu className="h-4 w-4" />
+                </Button>
+              }
             />
-            <span className="font-semibold">Budget & Tracking</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <UserMenu user={user} />
+            {/* `w-72!` beats the primitive's `data-[side=left]:w-3/4`, whose
+                attribute selector outranks a plain width class. */}
+            <SheetContent side="left" className="w-72! max-w-[85vw] gap-0">
+              <SheetHeader className="flex-row items-center gap-3 border-b pr-12">
+                <Image
+                  src="/cap_logo.png"
+                  alt="Cap & Gown crest"
+                  width={1068}
+                  height={1374}
+                  className="h-9 w-auto shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Cap & Gown
+                  </p>
+                  <SheetTitle className="truncate text-base font-bold">
+                    Budget & Tracking
+                  </SheetTitle>
+                  {semesterName && (
+                    <SheetDescription className="truncate text-xs">
+                      {semesterName}
+                    </SheetDescription>
+                  )}
+                </div>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto p-3">
+                <NavLinks
+                  pathname={pathname}
+                  role={user.role}
+                  touch
+                  onNavigate={() => setMenuOpen(false)}
+                />
+              </div>
+              {/* Padded past the home indicator on phones with a gesture bar. */}
+              <SheetFooter className="gap-3 border-t pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <ThemeToggle showLabels className="w-full" />
+                <UserPanel user={user} />
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+          <Image
+            src="/cap_logo.png"
+            alt="Cap & Gown crest"
+            width={1068}
+            height={1374}
+            className="h-7 w-auto shrink-0"
+          />
+          <div className="min-w-0">
+            <p className="truncate font-semibold leading-tight">
+              Budget & Tracking
+            </p>
+            {semesterName && (
+              <p className="truncate text-xs leading-tight text-muted-foreground">
+                {semesterName}
+              </p>
+            )}
           </div>
         </header>
         {/* One container for every page, so widths and gutters never drift
