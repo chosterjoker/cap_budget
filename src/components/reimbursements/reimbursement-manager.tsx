@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { downscaleImage } from "@/lib/image";
@@ -11,6 +11,7 @@ import {
   scanReceipt,
 } from "@/actions/reimbursements";
 import { createCheck } from "@/actions/checks";
+import { CameraCapture } from "@/components/common/camera-capture";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +40,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import Image from "next/image";
-import { ArrowDown, ArrowUp, ArrowUpDown, Sparkles, Loader2, Upload, Check } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Sparkles, Loader2, Upload, Check, Camera } from "lucide-react";
 
 type Reimbursement = {
   id: string;
@@ -599,27 +600,32 @@ function CreateReimbursementForm({
   const [parsedData, setParsedData] = useState("");
   const [scan, setScan] = useState<ScanState>("idle");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  async function handleReceipt(e: React.ChangeEvent<HTMLInputElement>) {
-    const original = e.target.files?.[0];
+  /**
+   * Single entry point for a receipt image, whether it came from the file
+   * picker or the live camera: shrink it, push it into the file input so the
+   * form still submits the image, then OCR it to pre-fill the fields.
+   */
+  async function ingestReceipt(original: File, displayName?: string) {
     setParsedData("");
-    if (!original) {
-      setFileName(null);
-      setScan("idle");
-      return;
-    }
     // Shrink big phone photos before they leave the browser — Vercel caps
     // request bodies at ~4.5MB and OpenAI rejects images over ~20MB. Swap the
     // downscaled file back into the input so the *stored* receipt is small too.
     const file = await downscaleImage(original);
-    try {
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      e.target.files = dt.files;
-    } catch {
-      // DataTransfer unsupported — submit falls back to the original file.
+    const input = fileInputRef.current;
+    if (input) {
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+      } catch {
+        // DataTransfer unsupported — submit falls back to whatever the input
+        // already holds (the original file, or nothing for a camera capture).
+      }
     }
-    setFileName(original.name);
+    setFileName(displayName ?? original.name);
     if (!ocrEnabled || !file.type.startsWith("image/")) {
       setScan("idle");
       return;
@@ -647,6 +653,17 @@ function CreateReimbursementForm({
     }
   }
 
+  async function handleReceipt(e: React.ChangeEvent<HTMLInputElement>) {
+    const original = e.target.files?.[0];
+    if (!original) {
+      setParsedData("");
+      setFileName(null);
+      setScan("idle");
+      return;
+    }
+    await ingestReceipt(original);
+  }
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-2">
@@ -659,6 +676,7 @@ function CreateReimbursementForm({
           )}
         </Label>
         <input
+          ref={fileInputRef}
           id="receipt-upload"
           name="receipt"
           type="file"
@@ -690,13 +708,26 @@ function CreateReimbursementForm({
               {fileName ?? "Choose receipt image"}
             </span>
             <span className="block text-xs text-muted-foreground">
-              {fileName ? "Click to replace" : "Upload a photo or scan of your receipt"}
+              {fileName ? "Click to replace" : "Upload a photo, or scan one with your camera below"}
             </span>
           </span>
           <span className="shrink-0 rounded-md border bg-background px-2.5 py-1 text-xs font-medium">
             Browse
           </span>
         </label>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => setCameraOpen(true)}
+        >
+          <Camera className="h-4 w-4" /> Scan with camera
+        </Button>
+        <CameraCapture
+          open={cameraOpen}
+          onOpenChange={setCameraOpen}
+          onCapture={(file) => ingestReceipt(file, "Camera photo")}
+        />
         <input type="hidden" name="parsedData" value={parsedData} />
         {scan === "scanning" && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
