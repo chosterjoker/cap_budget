@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Meter } from "@/components/common/meter";
 import {
   Select,
@@ -31,7 +33,7 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Role } from "@prisma/client";
 
@@ -63,6 +65,40 @@ type User = {
   name: string | null;
   role: Role;
 };
+
+// Percent entry is a convenience view over the same data: dollars stay the
+// stored source of truth, so changing the total budget later never silently
+// rescales existing allocations.
+type AllocMode = "amount" | "percent";
+
+function percentToDollars(percent: number, totalBudget: number) {
+  return Math.round(percent * totalBudget) / 100;
+}
+
+function dollarsToPercentInput(amount: number, totalBudget: number) {
+  if (totalBudget <= 0) return "0";
+  return String(Math.round((amount / totalBudget) * 10000) / 100);
+}
+
+function AllocationInput({
+  mode,
+  className,
+  ...props
+}: React.ComponentProps<typeof Input> & { mode: AllocMode }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+        {mode === "amount" ? "$" : "%"}
+      </span>
+      <Input
+        type="number"
+        step="0.01"
+        className={cn("pl-7", className)}
+        {...props}
+      />
+    </div>
+  );
+}
 
 export function SettingsManager({
   semesters,
@@ -124,6 +160,11 @@ export function SettingsManager({
   }
 
   const allocatedTotal = categories.reduce((s, c) => s + c.allocatedAmount, 0);
+
+  const [allocMode, setAllocMode] = useState<AllocMode>("amount");
+  // Percent entry needs a nonzero budget to convert against.
+  const mode: AllocMode =
+    activeSemester && activeSemester.totalBudget > 0 ? allocMode : "amount";
 
   return (
     <div className="space-y-8">
@@ -245,6 +286,30 @@ export function SettingsManager({
         <Card>
           <CardHeader>
             <CardTitle>Categories — {activeSemester.name}</CardTitle>
+            <CardAction>
+              <Tabs
+                value={mode}
+                onValueChange={(v) => setAllocMode(v as AllocMode)}
+              >
+                <TabsList>
+                  <TabsTrigger
+                    value="amount"
+                    className="px-2.5"
+                    aria-label="Allocate by dollar amount"
+                  >
+                    $
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="percent"
+                    className="px-2.5"
+                    disabled={activeSemester.totalBudget <= 0}
+                    aria-label="Allocate by percent of total budget"
+                  >
+                    %
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </CardAction>
           </CardHeader>
           <CardContent className="space-y-4">
             <BudgetTargetPanel
@@ -253,17 +318,27 @@ export function SettingsManager({
               allocatedTotal={allocatedTotal}
               onSaved={() => router.refresh()}
             />
+            {mode === "percent" && (
+              <p className="text-xs text-muted-foreground">
+                Enter percentages of the{" "}
+                {formatCurrency(activeSemester.totalBudget)} total budget —
+                they&apos;re saved as dollar amounts.
+              </p>
+            )}
             <form
               className="flex flex-wrap gap-2"
               onSubmit={async (e) => {
                 e.preventDefault();
                 const form = e.currentTarget;
                 const fd = new FormData(form);
+                const raw = parseFloat(fd.get("amount") as string);
                 try {
                   await addCategory(
                     activeSemester.id,
                     fd.get("name") as string,
-                    parseFloat(fd.get("amount") as string)
+                    mode === "percent"
+                      ? percentToDollars(raw, activeSemester.totalBudget)
+                      : raw
                   );
                   form.reset();
                   toast.success("Category added");
@@ -274,10 +349,9 @@ export function SettingsManager({
               }}
             >
               <Input name="name" placeholder="Category name" required />
-              <Input
+              <AllocationInput
+                mode={mode}
                 name="amount"
-                type="number"
-                step="0.01"
                 placeholder="Allocated"
                 required
               />
@@ -295,7 +369,13 @@ export function SettingsManager({
               </TableHeader>
               <TableBody>
                 {categories.map((c) => (
-                  <CategoryRow key={c.id} category={c} onSaved={() => router.refresh()} />
+                  <CategoryRow
+                    key={c.id}
+                    category={c}
+                    mode={mode}
+                    totalBudget={activeSemester.totalBudget}
+                    onSaved={() => router.refresh()}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -525,6 +605,12 @@ function BudgetTargetPanel({
           <p className="mt-1 text-2xl font-semibold tabular-nums">
             {formatCurrency(allocatedTotal)}
           </p>
+          {semester.totalBudget > 0 && (
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {formatPercent((allocatedTotal / semester.totalBudget) * 100)} of
+              budget
+            </p>
+          )}
         </div>
       </div>
       <Meter
@@ -547,11 +633,35 @@ function BudgetTargetPanel({
   );
 }
 
-function CategoryRow({ category, onSaved }: { category: Category; onSaved: () => void }) {
+function CategoryRow({
+  category,
+  mode,
+  totalBudget,
+  onSaved,
+}: {
+  category: Category;
+  mode: AllocMode;
+  totalBudget: number;
+  onSaved: () => void;
+}) {
   const [name, setName] = useState(category.name);
-  const [amount, setAmount] = useState(String(category.allocatedAmount));
+  const stored =
+    mode === "percent"
+      ? dollarsToPercentInput(category.allocatedAmount, totalBudget)
+      : String(category.allocatedAmount);
+  const [amount, setAmount] = useState(stored);
+  // Re-derive the input when the $/% toggle flips, without losing name edits.
+  const [prevMode, setPrevMode] = useState(mode);
+  if (mode !== prevMode) {
+    setPrevMode(mode);
+    setAmount(stored);
+  }
   const [saving, setSaving] = useState(false);
-  const dirty = name !== category.name || amount !== String(category.allocatedAmount);
+  const amountDirty = amount !== stored;
+  const dirty = name !== category.name || amountDirty;
+  const parsed = parseFloat(amount);
+  const parsedDollars =
+    mode === "percent" ? percentToDollars(parsed, totalBudget) : parsed;
 
   return (
     <TableRow>
@@ -559,13 +669,19 @@ function CategoryRow({ category, onSaved }: { category: Category; onSaved: () =>
         <Input value={name} onChange={(e) => setName(e.target.value)} className="h-8" />
       </TableCell>
       <TableCell>
-        <Input
+        <AllocationInput
+          mode={mode}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          type="number"
-          step="0.01"
           className="h-8 text-right tabular-nums"
         />
+        {!isNaN(parsed) && totalBudget > 0 && (
+          <p className="mt-1 text-right text-xs tabular-nums text-muted-foreground">
+            {mode === "percent"
+              ? `= ${formatCurrency(parsedDollars)}`
+              : `= ${formatPercent((parsed / totalBudget) * 100)}`}
+          </p>
+        )}
       </TableCell>
       <TableCell>
         <div className="flex gap-1">
@@ -576,13 +692,24 @@ function CategoryRow({ category, onSaved }: { category: Category; onSaved: () =>
             onClick={async () => {
               setSaving(true);
               try {
-                const parsed = parseFloat(amount);
-                if (isNaN(parsed)) throw new Error("Invalid amount");
+                if (amountDirty && isNaN(parsedDollars)) {
+                  throw new Error("Invalid amount");
+                }
                 await updateCategory(category.id, {
                   name: name !== category.name ? name : undefined,
-                  allocatedAmount: parsed !== category.allocatedAmount ? parsed : undefined,
+                  // Only send the amount when the input was actually edited —
+                  // the percent display is rounded, so converting it back can
+                  // differ by a cent from what's stored.
+                  allocatedAmount: amountDirty ? parsedDollars : undefined,
                 });
                 toast.success("Saved");
+                if (amountDirty) {
+                  setAmount(
+                    mode === "percent"
+                      ? dollarsToPercentInput(parsedDollars, totalBudget)
+                      : String(parsedDollars)
+                  );
+                }
                 onSaved();
               } catch (err) {
                 toast.error(err instanceof Error ? err.message : "Failed");
