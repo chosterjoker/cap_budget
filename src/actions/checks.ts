@@ -81,6 +81,7 @@ export async function createCheck(data: {
   });
 
   revalidatePath("/checks");
+  revalidatePath("/venmo");
   revalidatePath("/reimbursements");
   revalidatePath("/budget");
   revalidatePath("/");
@@ -172,6 +173,7 @@ export async function updateCheck(
   });
 
   revalidatePath("/checks");
+  revalidatePath("/venmo");
   revalidatePath("/budget");
   revalidatePath("/");
 }
@@ -189,6 +191,7 @@ export async function deleteCheck(id: string) {
     prisma.check.delete({ where: { id } }),
   ]);
   revalidatePath("/checks");
+  revalidatePath("/venmo");
   revalidatePath("/reimbursements");
   revalidatePath("/budget");
   revalidatePath("/");
@@ -279,6 +282,7 @@ export async function createChecks(semesterId: string, items: NewCheckInput[]) {
   });
 
   revalidatePath("/checks");
+  revalidatePath("/venmo");
   revalidatePath("/budget");
   revalidatePath("/");
 }

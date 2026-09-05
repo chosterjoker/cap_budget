@@ -45,17 +45,24 @@ type VenmoRow = {
 
 type Week = { id: string; weekNumber: number; label: string | null };
 
+type VenmoSummary = {
+  collected: number;
+  paid: number;
+  balance: number;
+  paymentCount: number;
+};
+
 export function VenmoManager({
   semesterId,
   entries,
   weeks,
-  total,
+  summary,
   isTreasurer,
 }: {
   semesterId: string;
   entries: VenmoRow[];
   weeks: Week[];
-  total: number;
+  summary: VenmoSummary;
   isTreasurer: boolean;
 }) {
   const router = useRouter();
@@ -106,19 +113,20 @@ export function VenmoManager({
     <div className="space-y-6">
       <StatRow cols={3}>
         <StatTile
-          label="Total Venmo income"
-          value={formatCurrency(total)}
-          hint="Increases available funds on the dashboard"
-          tone="success"
+          label="Venmo balance"
+          value={formatCurrency(summary.balance)}
+          hint="Collections minus checks paid via Venmo"
+          tone={summary.balance < 0 ? "danger" : "success"}
         />
         <StatTile
-          label="Collections logged"
-          value={String(entries.length)}
-          hint="This semester"
+          label="Collected"
+          value={formatCurrency(summary.collected)}
+          hint={`${entries.length} collection${entries.length === 1 ? "" : "s"} this semester`}
         />
         <StatTile
-          label="Average collection"
-          value={formatCurrency(entries.length ? total / entries.length : 0)}
+          label="Paid via Venmo"
+          value={formatCurrency(summary.paid)}
+          hint={`${summary.paymentCount} payment${summary.paymentCount === 1 ? "" : "s"} logged on the Checks tab`}
         />
       </StatRow>
 

@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Compares spend against how far into the semester we are. Spending power is
- * the budget plus Venmo income, matching how `availableBudget` is derived.
+ * the budget plus gross Venmo collections, matching how `availableBudget` is
+ * derived — Venmo-paid checks already sit inside `totalSpent`.
  */
 function pace(spent: number, spendingPower: number, elapsed: number | null) {
   if (elapsed === null || spendingPower <= 0) return null;
@@ -41,12 +42,14 @@ function pace(spent: number, spendingPower: number, elapsed: number | null) {
 export function BudgetHealth({
   totalBudget,
   venmoTotal,
+  venmoBalance,
   totalSpent,
   availableBudget,
   elapsed,
 }: {
   totalBudget: number;
   venmoTotal: number;
+  venmoBalance: number;
   totalSpent: number;
   availableBudget: number;
   elapsed: number | null;
@@ -130,7 +133,7 @@ export function BudgetHealth({
         <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-t pt-6 text-sm lg:w-56 lg:grid-cols-1 lg:gap-y-5 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
           <Figure label="Total budget" value={formatCurrency(totalBudget)} />
           <Figure label="Spent to date" value={formatCurrency(totalSpent)} />
-          <Figure label="Venmo income" value={formatCurrency(venmoTotal)} />
+          <Figure label="Venmo balance" value={formatCurrency(venmoBalance)} />
         </dl>
       </CardContent>
     </Card>

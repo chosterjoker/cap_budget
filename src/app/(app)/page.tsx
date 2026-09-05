@@ -181,6 +181,7 @@ export default async function DashboardPage() {
       <BudgetHealth
         totalBudget={stats.totalBudget}
         venmoTotal={stats.venmoTotal}
+        venmoBalance={stats.venmoBalance}
         totalSpent={stats.totalSpent}
         availableBudget={stats.availableBudget}
         elapsed={elapsed}

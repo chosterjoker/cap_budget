@@ -87,6 +87,34 @@ export async function getBudgetGridData(semesterId: string) {
   };
 }
 
+/**
+ * Venmo is its own pool of money, separate from the bank account. Collections
+ * flow in via the Venmo tab; payments flow out as checks whose payment method
+ * is Venmo. Carryover checks are excluded — they're a previous semester's
+ * outflow, and collections are only tracked per semester.
+ */
+export async function getVenmoSummary(semesterId: string) {
+  const [income, payments] = await Promise.all([
+    prisma.venmoIncome.aggregate({
+      where: { semesterId },
+      _sum: { amount: true },
+    }),
+    prisma.check.aggregate({
+      where: { semesterId, paymentMethod: "VENMO", isCarryover: false },
+      _sum: { amount: true },
+      _count: true,
+    }),
+  ]);
+  const collected = income._sum.amount ?? 0;
+  const paid = payments._sum.amount ?? 0;
+  return {
+    collected,
+    paid,
+    balance: collected - paid,
+    paymentCount: payments._count,
+  };
+}
+
 export async function getDashboardStats(semesterId: string) {
   const [
     semester,
@@ -118,10 +146,7 @@ export async function getDashboardStats(semesterId: string) {
       where: { semesterId },
       orderBy: { date: "desc" },
     }),
-    prisma.venmoIncome.aggregate({
-      where: { semesterId },
-      _sum: { amount: true },
-    }),
+    getVenmoSummary(semesterId),
     prisma.check.findMany({
       where: { semesterId },
       orderBy: { date: "desc" },
@@ -169,10 +194,15 @@ export async function getDashboardStats(semesterId: string) {
   return {
     ...budget,
     totalDeposited,
-    venmoTotal: venmo._sum.amount ?? 0,
-    // What's left to spend: budget (+ Venmo income) minus what's been spent.
+    venmoTotal: venmo.collected,
+    // What's actually sitting in Venmo: collections minus Venmo-paid checks.
+    venmoBalance: venmo.balance,
+    // What's left to spend: budget (+ Venmo collections) minus what's been
+    // spent. Venmo-paid checks are already inside totalSpent, so the gross
+    // collections figure is the right one here — using the net balance would
+    // count those payments twice.
     availableBudget:
-      budget.totalBudget + (venmo._sum.amount ?? 0) - budget.totalSpent,
+      budget.totalBudget + venmo.collected - budget.totalSpent,
     unclearedChecks: unclearedChecks.length,
     unclearedAmount,
     clearedAmount,
