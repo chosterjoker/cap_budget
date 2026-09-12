@@ -4,12 +4,19 @@ export type WeekSeed = {
   label: string | null;
 };
 
+const DAY_MS = 86400000;
+
+// Calendar dates in this app (week starts, check/expense/reimbursement dates)
+// are stored as UTC midnight — see `formatDate` in src/lib/format.ts. Week
+// math therefore has to run in UTC too: using local getters would shift a
+// Saturday- or Sunday-dated item into the wrong week on any server not running
+// in UTC (e.g. `next dev` on a laptop in a US timezone).
 function previousSunday(date: Date): Date {
   const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const dow = d.getDay();
+  d.setUTCHours(0, 0, 0, 0);
+  const dow = d.getUTCDay();
   if (dow === 0) return d;
-  d.setDate(d.getDate() - dow);
+  d.setUTCDate(d.getUTCDate() - dow);
   return d;
 }
 
@@ -22,12 +29,11 @@ export function generateWeeks(
   const last = endDate ? new Date(endDate) : null;
   const weeks: WeekSeed[] = [];
   const maxWeeks = last
-    ? Math.ceil((last.getTime() - first.getTime()) / (7 * 86400000)) + 1
+    ? Math.ceil((last.getTime() - first.getTime()) / (7 * DAY_MS)) + 1
     : 16;
 
   for (let i = 0; i < maxWeeks; i++) {
-    const ws = new Date(first);
-    ws.setDate(first.getDate() + i * 7);
+    const ws = new Date(first.getTime() + i * 7 * DAY_MS);
     if (last && ws > last) break;
     weeks.push({
       weekNumber: i + 1,
@@ -38,6 +44,11 @@ export function generateWeeks(
   return weeks;
 }
 
+/**
+ * The week whose Sunday-aligned range contains `date`, or null when the date
+ * falls outside every defined week (before the semester starts, after it ends,
+ * or a mistyped year).
+ */
 export function findWeekForDate(
   date: Date,
   weeks: { id: string; startDate: Date }[]

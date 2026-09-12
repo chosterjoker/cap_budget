@@ -196,7 +196,7 @@ export function BudgetGrid({
                     )}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Optional" />
+                      <SelectValue placeholder="Auto from date" />
                     </SelectTrigger>
                     <SelectContent>
                       {weeks.map((w) => (

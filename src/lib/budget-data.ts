@@ -26,10 +26,15 @@ export async function getBudgetGridData(semesterId: string) {
   ]);
 
   // `cellMap` powers the per-week grid columns; `categoryTotals` tracks the
-  // full spend per category. We keep them separate because check-created
-  // expenses (and reimbursements that don't fall inside a defined week) have no
-  // weekId — they belong to a category's total even though no week column owns
-  // them, so summing the columns alone would silently drop that spend.
+  // full spend per category. They're kept separate because a row can fall
+  // outside every defined week (a date before the semester starts, or a
+  // mistyped year) — it still belongs to the category's total even though no
+  // week column owns it, so summing the columns alone would silently drop it.
+  //
+  // Which week column a row lands in: an explicit `weekId` (chosen in the
+  // "Add expense" dialog) wins; otherwise it is derived from the row's date.
+  // Expenses mirrored from checks never carry a weekId, so they always follow
+  // the check's date — including when that date is later edited.
   const cellMap = new Map<string, number>();
   const categoryTotals = new Map<string, number>();
   const bump = (categoryId: string, weekId: string | null, amount: number) => {
@@ -38,7 +43,7 @@ export async function getBudgetGridData(semesterId: string) {
     categoryTotals.set(categoryId, (categoryTotals.get(categoryId) ?? 0) + amount);
   };
   for (const e of expenses) {
-    bump(e.categoryId, e.weekId, e.amount);
+    bump(e.categoryId, e.weekId ?? findWeekForDate(e.date, weeks), e.amount);
   }
   for (const r of reimbursements) {
     if (!r.categoryId) continue;
