@@ -69,6 +69,21 @@ It finds the header row, splits it into one *group* per "Name" column (each grou
 
 **Do not turn this back into a per-row `upsert` loop.** 196 upserts against the Supabase pooler took ~45s (one round trip each) — past the serverless request budget. The action instead reads the existing rows once, `createMany`s the new ones, and `UPDATE`s only rows whose name or class year actually changed: ~1.4s for a first import, <1s for an unchanged re-upload.
 
+## CSV import (Bank history → cleared checks)
+
+`src/lib/csv.ts::parseBankHistoryCsv` reads the bank's *Account History* export (`Account Number, Post Date, Check, Description, Debit, Credit, Status, Balance`) down to its check rows: a row with a check number and a **debit** is a payment, one with a **credit** is the bank *returning* (bouncing) that check. Deposits, fees, transfers and anything not `Posted` are dropped. Dates parse to UTC midnight, per the calendar-date convention below.
+
+`src/lib/check-clearing.ts::matchClearedChecks` is a pure function (register checks + bank rows → what to clear), so the rules can be tested without a database. They were shaped by the real file, and each one guards against a specific wrong answer:
+
+- **A check number is not a key.** The club runs several checkbooks and the history reaches back to 2021: 212 numbers repeat, a year or so apart, for different amounts. A match therefore needs number **and** amount (compared in cents) **and** a post date no earlier than 60 days before the register date. The slack exists because a check entered late defaults its date to "today", which can land after the bank already paid it; anything older is a previous check that shared the number.
+- **Returns cancel debits.** A `RETURNED CHECK` credit is netted against the debit it reversed, so a bounced check doesn't clear — but one that bounced and was re-presented does, dated by the debit that stuck.
+- **One bank row, one check.** Every debit (and every bounce) is claimed by at most one register check. A check entered in the register twice is not cleared twice off a single payment; the second copy stays outstanding, which is what exposes the duplicate.
+- **Proof before guesswork — the pass order is load-bearing.** Pass 1 gives *every* check first refusal on its exact match; only then does pass 2 explain the leftovers (returned / amount mismatch), and pass 3 offer the misread-number hunch. An earlier single-loop version let an older check with the wrong amount claim the debit that a later same-numbered check matched exactly, leaving the real one outstanding with no diagnostic. Don't fold the passes back together.
+- **Re-uploads are no-ops.** Exports overlap, so already-cleared checks claim their bank row *first* (nothing else can take it) and are never rewritten. `updateMany` also filters on `cleared: false`.
+- **Doubt is reported, never acted on.** Same number with a different amount, a returned check, or an unrecorded bank check one digit away from an open register check for the same amount (a likely misread — numbers are mostly OCR'd off handwriting) all come back in a `review` list and leave the register untouched.
+
+`importClearedChecks` scopes to the active semester and to `paymentMethod: CHECK` (a wire or Venmo ref that happens to be numeric must not match a bank check number), writes one `updateMany` per distinct post date rather than one per check, and stamps `clearedDate` with the bank's post date. It also lists debits that posted inside the semester's dates with no register check at all. Expected failures (not a bank export, no file) return `{ ok: false, error }` instead of throwing, because Next replaces thrown messages with a generic one in production.
+
 ## Membership dues
 
 `Semester.duesAmount` × every non-`WAIVED` member = expected; `sum(Member.amountPaid)` = collected. `status` is the tracking state (`NOT_BILLED → BILLED → AWAITING_PAYMENT → PAID_HALF → PAID_FULL`, plus `WAIVED`); `amountPaid` is the money. They're deliberately independent — status changes only *pre-fill* the amount (`impliedAmountPaid` in `src/lib/membership.ts`), so an odd partial payment can be typed exactly. `MEMBERSHIP_STATUSES` mirrors the enum's declaration order and is what the status sort uses; keep the two in step.

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireTreasurer } from "@/lib/auth";
 import { parseChecksFromBuffer, type ParsedCheck } from "@/lib/ocr";
+import { parseBankHistoryCsv } from "@/lib/csv";
+import { matchClearedChecks } from "@/lib/check-clearing";
 import type { PaymentMethod } from "@prisma/client";
 
 // Thrown inside the `createChecks` transaction to roll it back. Not exported —
@@ -344,4 +346,141 @@ export async function createChecks(
   revalidatePath("/budget");
   revalidatePath("/");
   return { ok: true };
+}
+
+export type ClearedImportResult =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      marked: {
+        checkNumber: string;
+        recipientName: string;
+        amount: number;
+        clearedDate: string;
+      }[];
+      alreadyCleared: number;
+      review: {
+        checkNumber: string;
+        recipientName: string;
+        amount: number;
+        cleared: boolean;
+        reason: "amount" | "returned" | "number";
+        bankCheckNumber: string;
+        bankAmount: number;
+        bankDate: string;
+      }[];
+      // Posted at the bank during this semester, but not in the register.
+      unrecorded: { checkNumber: string; amount: number; postDate: string }[];
+    };
+
+/**
+ * Marks checks cleared from the bank's account-history CSV, stamping each with
+ * the bank's post date.
+ *
+ * Safe to re-run: exports overlap (each one repeats the history before it), and
+ * a check that is already cleared is left exactly as it is. Only real paper
+ * checks are considered — a wire or Venmo ref that happens to be numeric must
+ * not match a bank check number. See `matchClearedChecks` for the match rules.
+ *
+ * A bad file is an expected outcome, so it comes back as `{ ok: false }` rather
+ * than a throw — Next masks thrown messages in production.
+ */
+export async function importClearedChecks(
+  formData: FormData
+): Promise<ClearedImportResult> {
+  await requireTreasurer();
+  const semesterId = formData.get("semesterId") as string;
+  const file = formData.get("file") as File | null;
+  if (!semesterId || !file || file.size === 0) {
+    return { ok: false, error: "Choose the bank's CSV export first." };
+  }
+
+  const bankRows = parseBankHistoryCsv(await file.text());
+  if (!bankRows.length) {
+    return {
+      ok: false,
+      error:
+        "No posted checks found — expected the bank's account history export, with Post Date, Check and Debit columns.",
+    };
+  }
+
+  const [semester, checks] = await Promise.all([
+    prisma.semester.findUnique({
+      where: { id: semesterId },
+      select: { startDate: true, endDate: true },
+    }),
+    prisma.check.findMany({
+      where: { semesterId, paymentMethod: "CHECK" },
+      select: {
+        id: true,
+        checkNumber: true,
+        recipientName: true,
+        amount: true,
+        date: true,
+        cleared: true,
+      },
+    }),
+  ]);
+  if (!semester) return { ok: false, error: "Semester not found." };
+
+  const recipientOf = new Map(checks.map((c) => [c.id, c.recipientName]));
+  const result = matchClearedChecks(checks, bankRows);
+
+  // One UPDATE per distinct post date, not per check — a first import can clear
+  // a whole semester's worth at once.
+  const idsByDate = new Map<number, string[]>();
+  for (const { check, postDate } of result.toClear) {
+    const ids = idsByDate.get(postDate.getTime());
+    if (ids) ids.push(check.id);
+    else idsByDate.set(postDate.getTime(), [check.id]);
+  }
+  if (idsByDate.size) {
+    await prisma.$transaction(
+      [...idsByDate].map(([ts, ids]) =>
+        prisma.check.updateMany({
+          where: { id: { in: ids }, cleared: false },
+          data: { cleared: true, clearedDate: new Date(ts) },
+        })
+      )
+    );
+  }
+
+  // The file reaches back years; only this semester's strays are worth flagging.
+  const start = semester.startDate.getTime();
+  const end = semester.endDate?.getTime() ?? Infinity;
+  const unrecorded = result.unmatched.filter((d) => {
+    const ts = d.postDate.getTime();
+    return ts >= start && ts <= end;
+  });
+
+  revalidatePath("/checks");
+  revalidatePath("/deposits");
+  revalidatePath("/");
+  return {
+    ok: true,
+    marked: result.toClear
+      .map(({ check, postDate }) => ({
+        checkNumber: check.checkNumber,
+        recipientName: recipientOf.get(check.id) ?? "",
+        amount: check.amount,
+        clearedDate: postDate.toISOString(),
+      }))
+      .sort((a, b) => b.clearedDate.localeCompare(a.clearedDate)),
+    alreadyCleared: result.alreadyCleared,
+    review: result.review.map((v) => ({
+      checkNumber: v.check.checkNumber,
+      recipientName: recipientOf.get(v.check.id) ?? "",
+      amount: v.check.amount,
+      cleared: v.check.cleared,
+      reason: v.reason,
+      bankCheckNumber: v.bankCheckNumber,
+      bankAmount: v.bankAmount,
+      bankDate: v.bankDate.toISOString(),
+    })),
+    unrecorded: unrecorded.map((d) => ({
+      checkNumber: d.checkNumber,
+      amount: d.amount,
+      postDate: d.postDate.toISOString(),
+    })),
+  };
 }

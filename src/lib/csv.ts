@@ -50,12 +50,27 @@ export type SocialCalendarRow = {
   notes: string | null;
 };
 
-function parseMdy(raw: string): Date | null {
+/** `M/D/YY(YY)` → [year, monthIndex, day], or null if it isn't that shape. */
+function mdyParts(raw: string): [number, number, number] | null {
   const m = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (!m) return null;
   const [, mm, dd, rawYy] = m;
   const yy = rawYy.length === 2 ? `20${rawYy}` : rawYy;
-  const d = new Date(Number(yy), Number(mm) - 1, Number(dd));
+  return [Number(yy), Number(mm) - 1, Number(dd)];
+}
+
+function parseMdy(raw: string): Date | null {
+  const parts = mdyParts(raw);
+  if (!parts) return null;
+  const d = new Date(...parts);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Like `parseMdy`, but UTC midnight — how check dates are stored (see lib/format). */
+function parseMdyUtc(raw: string): Date | null {
+  const parts = mdyParts(raw);
+  if (!parts) return null;
+  const d = new Date(Date.UTC(...parts));
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -209,6 +224,72 @@ export function parseMembershipCsv(text: string): MembershipRow[] {
 
       out.push({ name, email, classYear });
     });
+  }
+  return out;
+}
+
+export type BankCheckRow = {
+  // As printed by the bank; `matchClearedChecks` normalises before comparing.
+  checkNumber: string;
+  postDate: Date;
+  amount: number;
+  // "return" is the bank bouncing the check back (NSF) — a credit that reverses
+  // an earlier debit of the same check, so that debit never really cleared.
+  kind: "debit" | "return";
+};
+
+/**
+ * Parses the bank's "Account History" export down to its check rows:
+ *
+ *   Account Number,Post Date,Check,Description,Debit,Credit,Status,Balance
+ *   "3464",9/15/2026,2740,"Check",37.50,,Posted,9967.25
+ *   "3464",6/6/2024,1935,"RETURNED CHECK# 1935, INSUFFICIENT FUNDS",,7365.00,Posted,…
+ *
+ * Deposits, transfers and fees have no check number and are dropped, as is
+ * anything still pending — only a posted debit means the check cleared.
+ */
+export function parseBankHistoryCsv(text: string): BankCheckRow[] {
+  const rows = parseCsv(text.replace(/^\uFEFF/, ""));
+
+  const isCheck = (c: string) => /^check( ?(#|no\.?|number))?$/.test(c);
+  const isDate = (c: string) => /^(post(ed|ing)? )?date$/.test(c);
+
+  let headerIdx = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const cells = rows[i].map((c) => c.trim().toLowerCase());
+    if (cells.some(isCheck) && cells.some(isDate) && cells.includes("debit")) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx === -1) return [];
+
+  const header = rows[headerIdx].map((c) => c.trim().toLowerCase());
+  const iCheck = header.findIndex(isCheck);
+  const iDate = header.findIndex(isDate);
+  const iDebit = header.indexOf("debit");
+  const iCredit = header.indexOf("credit");
+  const iStatus = header.indexOf("status");
+
+  const money = (raw: string | undefined) => {
+    const n = parseFloat((raw ?? "").replace(/[$,\s]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const out: BankCheckRow[] = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const checkNumber = row[iCheck]?.trim();
+    if (!checkNumber) continue;
+    const status = iStatus >= 0 ? row[iStatus]?.trim().toLowerCase() : "";
+    if (status && status !== "posted") continue;
+    const postDate = parseMdyUtc(row[iDate] ?? "");
+    if (!postDate) continue;
+
+    const debit = money(row[iDebit]);
+    const credit = iCredit >= 0 ? money(row[iCredit]) : null;
+    if (debit != null) out.push({ checkNumber, postDate, amount: debit, kind: "debit" });
+    else if (credit != null) out.push({ checkNumber, postDate, amount: credit, kind: "return" });
   }
   return out;
 }

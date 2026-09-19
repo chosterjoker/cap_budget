@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { createCheck, updateCheck, deleteCheck } from "@/actions/checks";
 import { ScanChecksDialog } from "@/components/checks/scan-checks-dialog";
+import { ImportClearedDialog } from "@/components/checks/import-cleared-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -278,6 +279,7 @@ export function CheckManager({
               Clear filters
             </Button>
           )}
+          {isTreasurer && <ImportClearedDialog semesterId={semesterId} />}
           {isTreasurer && ocrEnabled && (
             <ScanChecksDialog
               semesterId={semesterId}
