@@ -283,6 +283,7 @@ export function CheckManager({
               semesterId={semesterId}
               categories={categories}
               events={events}
+              reimbursements={reimbursements}
             />
           )}
           {isTreasurer && (
