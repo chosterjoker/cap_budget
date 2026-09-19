@@ -80,6 +80,12 @@ function payeeOf(r: { memberName: string | null; officer: Officer }) {
   return r.memberName?.trim() || r.officer.name || r.officer.email;
 }
 
+// Member names are typed free-hand, so "alex kim " and "Alex Kim" have to land
+// in the same filter bucket.
+function memberKey(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function reimbursementCheckNumber() {
   return `R-${Date.now().toString().slice(-6)}`;
 }
@@ -111,12 +117,31 @@ export function ReimbursementManager({
 
   const [search, setSearch] = useState("");
   const [sinceDate, setSinceDate] = useState("");
+  const [memberFilter, setMemberFilter] = useState("all");
   const [officerFilter, setOfficerFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [eventFilter, setEventFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "PENDING" | "APPROVED" | "PAID">("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Everyone who is owed (or was paid) something this semester. Built from the
+  // reimbursements rather than the roster or the officer list: the member being
+  // paid is often not the officer who submitted it, and need not be either.
+  const members = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const r of reimbursements) {
+      const name = payeeOf(r);
+      const key = memberKey(name);
+      if (!byKey.has(key)) byKey.set(key, name);
+    }
+    return [...byKey]
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [reimbursements]);
+  // If the chosen member's last reimbursement is deleted or renamed, fall back
+  // to "all" instead of filtering on a name that no longer exists.
+  const activeMember = members.some((m) => m.key === memberFilter) ? memberFilter : "all";
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -128,13 +153,14 @@ export function ReimbursementManager({
       }
       const ts = new Date(r.date).getTime();
       if (since && ts < since) return false;
+      if (activeMember !== "all" && memberKey(payeeOf(r)) !== activeMember) return false;
       if (officerFilter !== "all" && r.officer.id !== officerFilter) return false;
       if (categoryFilter !== "all" && r.categoryId !== categoryFilter) return false;
       if (eventFilter !== "all" && r.eventId !== eventFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       return true;
     });
-  }, [reimbursements, search, sinceDate, officerFilter, categoryFilter, eventFilter, statusFilter]);
+  }, [reimbursements, search, sinceDate, activeMember, officerFilter, categoryFilter, eventFilter, statusFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -182,6 +208,7 @@ export function ReimbursementManager({
   const hasActiveFilters =
     search !== "" ||
     sinceDate !== "" ||
+    activeMember !== "all" ||
     officerFilter !== "all" ||
     categoryFilter !== "all" ||
     eventFilter !== "all" ||
@@ -216,6 +243,7 @@ export function ReimbursementManager({
   function clearFilters() {
     setSearch("");
     setSinceDate("");
+    setMemberFilter("all");
     setOfficerFilter("all");
     setCategoryFilter("all");
     setEventFilter("all");
@@ -302,7 +330,7 @@ export function ReimbursementManager({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Search name, officer, tags, notes…"
+          placeholder="Search name, member, officer, tags, notes…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:max-w-xs"
@@ -352,7 +380,28 @@ export function ReimbursementManager({
             <TableRow className="bg-muted/20 hover:bg-transparent">
               <TableHead className="h-auto py-1.5" />
               <TableHead className="h-auto py-1.5" />
-              <TableHead className="h-auto py-1.5" />
+              <TableHead className="h-auto py-1.5">
+                <Select value={activeMember} onValueChange={(v) => setMemberFilter(v ?? "all")}>
+                  <SelectTrigger
+                    size="sm"
+                    className={`w-full font-normal ${activeMember === "all" ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    <SelectValue>
+                      {activeMember === "all"
+                        ? "All"
+                        : members.find((m) => m.key === activeMember)?.name ?? "All"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All members</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.key} value={m.key}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
               <TableHead className="h-auto py-1.5">
                 <Select value={officerFilter} onValueChange={(v) => setOfficerFilter(v ?? "all")}>
                   <SelectTrigger

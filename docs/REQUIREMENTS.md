@@ -41,12 +41,12 @@ Derived live from opening balances + ledgers, never stored as a snapshot:
 - `Outstanding checks = Σ uncleared checks` (includes carryover checks)
 - `True available cash = Expected bank balance − Outstanding checks`
 
-`cleared` is toggled manually from the Check register after verifying on the bank site. A **BankReconciliation** records the actual bank-site balance for comparison against the expected balance.
+`cleared` is set by uploading the bank's account-history CSV to the Check register (matched on check number + amount; safe to re-upload), or toggled by hand in the Edit modal. A **BankReconciliation** records the actual bank-site balance for comparison against the expected balance.
 
 ## P0 Features
 1. **Budget grid** — categories × weeks, color-coded, click cell to add expense
-2. **Check register** — read-only rows + Edit modal (cleared toggle inside modal, not inline); filter by date range / category / event / method / status / search; column sort
-3. **Reimbursements** — submit with receipt + optional category + optional event; treasurer approve → bundle approved into settlement Check; same Edit-modal pattern; filter by officer / category / event / status / date / search; column sort
+2. **Check register** — read-only rows + Edit modal (cleared toggle inside modal, not inline); filter by date range / category / event / method / status / search; column sort; **Import cleared** (bank CSV → marks posted checks cleared, flags amount mismatches / returned checks / likely misread numbers for review); **Scan checks** (one photo → a stack of pre-filled checks, each either a new payment or a settlement of open reimbursements)
+3. **Reimbursements** — submit with receipt + optional category + optional event; treasurer approve → bundle approved into settlement Check; same Edit-modal pattern; filter by member (who is paid — often not the officer who submitted) / officer / category / event / status / date / search; column sort
 4. **Deposits & bank balance** — running deposit log, Edit modal
 5. **Cash position & bank reconciliation** — computed Undeposited / Expected bank balance / Outstanding checks / True available cash (on the Dashboard); treasurer records actual bank-site balance, app shows computed-vs-actual delta + history
 6. **Dashboard** — budget stat cards + Cash Position cards + reconciliation panel + Spending by Category chart + Weekly Spending chart (adaptive `$X / $X.Xk / $XM` y-axis)

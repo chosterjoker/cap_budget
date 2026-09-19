@@ -4,7 +4,17 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireTreasurer } from "@/lib/auth";
 import { parseChecksFromBuffer, type ParsedCheck } from "@/lib/ocr";
+import { parseBankHistoryCsv } from "@/lib/csv";
+import { matchClearedChecks } from "@/lib/check-clearing";
 import type { PaymentMethod } from "@prisma/client";
+
+// Thrown inside the `createChecks` transaction to roll it back. Not exported —
+// a "use server" module may only export async functions.
+class StaleReimbursementError extends Error {
+  constructor(public position: number) {
+    super("Reimbursement already paid");
+  }
+}
 
 export async function createCheck(data: {
   semesterId: string;
@@ -218,71 +228,259 @@ export type NewCheckInput = {
   amount: number;
   date: string;
   recipientName: string;
-  categoryId: string;
+  // Required for a vendor payment. Unused when `reimbursementIds` is set — each
+  // reimbursement being paid already carries its own category.
+  categoryId?: string;
   eventId?: string;
   paymentMethod: PaymentMethod;
   memo?: string;
+  // Set when this check pays out reimbursements instead of being a new spend.
+  reimbursementIds?: string[];
 };
 
 /**
- * Bulk-create reviewed scanned checks in ONE transaction. Each is a vendor
- * payment (never a settlement), so — mirroring `createCheck` — every check gets
- * a category-required mirrored Expense. All-or-nothing: a bad row fails the whole
- * batch rather than leaving a partial save.
+ * Bulk-create reviewed scanned checks in ONE transaction. Mirroring
+ * `createCheck`, each is either a vendor payment (category required, gets a
+ * mirrored Expense) or a settlement (marks its reimbursements PAID and creates
+ * NO Expense — a reimbursement already counts toward the budget on its own, so
+ * an expense here would double-count it). All-or-nothing: a bad row fails the
+ * whole batch rather than leaving a partial save.
+ *
+ * Bad input comes back as `{ ok: false }` rather than a throw, so the message
+ * survives to the client — Next masks thrown messages in production.
  */
-export async function createChecks(semesterId: string, items: NewCheckInput[]) {
+export async function createChecks(
+  semesterId: string,
+  items: NewCheckInput[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireTreasurer();
-  if (!items.length) throw new Error("No checks to save.");
+  if (!items.length) return { ok: false, error: "No checks to save." };
 
-  items.forEach((it, i) => {
+  const claimed = new Set<string>();
+  for (const [i, it] of items.entries()) {
     const where = `Check ${i + 1}`;
-    if (!it.checkNumber?.trim()) throw new Error(`${where}: missing check / ref #.`);
-    if (!it.recipientName?.trim()) throw new Error(`${where}: missing recipient.`);
-    if (!it.description?.trim()) throw new Error(`${where}: missing description.`);
-    if (!it.categoryId) throw new Error(`${where}: select a budget category.`);
+    const fail = (msg: string) => ({ ok: false as const, error: `${where}: ${msg}` });
+    if (!it.checkNumber?.trim()) return fail("missing check / ref #.");
+    if (!it.recipientName?.trim()) return fail("missing recipient.");
+    if (!it.description?.trim()) return fail("missing description.");
+    if (!it.reimbursementIds?.length && !it.categoryId) {
+      return fail("select a budget category or the reimbursements it pays.");
+    }
     if (!Number.isFinite(it.amount) || it.amount <= 0) {
-      throw new Error(`${where}: amount must be greater than 0.`);
+      return fail("amount must be greater than 0.");
     }
     if (!it.date || Number.isNaN(new Date(it.date).getTime())) {
-      throw new Error(`${where}: invalid or missing date.`);
+      return fail("invalid or missing date.");
     }
-  });
+    for (const id of it.reimbursementIds ?? []) {
+      if (claimed.has(id)) return fail("pays a reimbursement another check already covers.");
+      claimed.add(id);
+    }
+  }
 
-  await prisma.$transaction(async (tx) => {
-    for (const it of items) {
-      const check = await tx.check.create({
-        data: {
-          semesterId,
-          checkNumber: it.checkNumber,
-          description: it.description,
-          amount: it.amount,
-          date: new Date(it.date),
-          recipientName: it.recipientName,
-          categoryId: it.categoryId,
-          eventId: it.eventId || null,
-          paymentMethod: it.paymentMethod,
-          cleared: false,
-          isCarryover: false,
-          memo: it.memo,
-        },
-      });
-      await tx.expense.create({
-        data: {
-          semesterId,
-          categoryId: it.categoryId,
-          eventId: it.eventId || null,
-          amount: it.amount,
-          description: it.description,
-          date: new Date(it.date),
-          paymentMethod: it.paymentMethod,
-          checkId: check.id,
-        },
-      });
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const [i, it] of items.entries()) {
+        const isSettlement = Boolean(it.reimbursementIds?.length);
+        const check = await tx.check.create({
+          data: {
+            semesterId,
+            checkNumber: it.checkNumber,
+            description: it.description,
+            amount: it.amount,
+            date: new Date(it.date),
+            recipientName: it.recipientName,
+            categoryId: isSettlement ? null : it.categoryId,
+            eventId: isSettlement ? null : it.eventId || null,
+            paymentMethod: it.paymentMethod,
+            cleared: false,
+            isCarryover: false,
+            memo: it.memo,
+          },
+        });
+        if (isSettlement) {
+          // The list the treasurer picked from may be stale — someone else could
+          // have paid one of these in the meantime. Only still-unpaid rows match,
+          // so a short count means roll the whole batch back.
+          const settled = await tx.reimbursement.updateMany({
+            where: {
+              id: { in: it.reimbursementIds! },
+              semesterId,
+              checkId: null,
+              status: { not: "PAID" },
+            },
+            data: { checkId: check.id, status: "PAID" },
+          });
+          if (settled.count !== it.reimbursementIds!.length) {
+            throw new StaleReimbursementError(i + 1);
+          }
+        } else {
+          await tx.expense.create({
+            data: {
+              semesterId,
+              categoryId: it.categoryId!,
+              eventId: it.eventId || null,
+              amount: it.amount,
+              description: it.description,
+              date: new Date(it.date),
+              paymentMethod: it.paymentMethod,
+              checkId: check.id,
+            },
+          });
+        }
+      }
+    });
+  } catch (err) {
+    if (err instanceof StaleReimbursementError) {
+      return {
+        ok: false,
+        error: `Check ${err.position}: one of its reimbursements was already paid. Nothing was saved — close this and rescan to pick from the current list.`,
+      };
     }
-  });
+    throw err;
+  }
 
   revalidatePath("/checks");
   revalidatePath("/venmo");
+  revalidatePath("/reimbursements");
   revalidatePath("/budget");
   revalidatePath("/");
+  return { ok: true };
+}
+
+export type ClearedImportResult =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      marked: {
+        checkNumber: string;
+        recipientName: string;
+        amount: number;
+        clearedDate: string;
+      }[];
+      alreadyCleared: number;
+      review: {
+        checkNumber: string;
+        recipientName: string;
+        amount: number;
+        cleared: boolean;
+        reason: "amount" | "returned" | "number";
+        bankCheckNumber: string;
+        bankAmount: number;
+        bankDate: string;
+      }[];
+      // Posted at the bank during this semester, but not in the register.
+      unrecorded: { checkNumber: string; amount: number; postDate: string }[];
+    };
+
+/**
+ * Marks checks cleared from the bank's account-history CSV, stamping each with
+ * the bank's post date.
+ *
+ * Safe to re-run: exports overlap (each one repeats the history before it), and
+ * a check that is already cleared is left exactly as it is. Only real paper
+ * checks are considered — a wire or Venmo ref that happens to be numeric must
+ * not match a bank check number. See `matchClearedChecks` for the match rules.
+ *
+ * A bad file is an expected outcome, so it comes back as `{ ok: false }` rather
+ * than a throw — Next masks thrown messages in production.
+ */
+export async function importClearedChecks(
+  formData: FormData
+): Promise<ClearedImportResult> {
+  await requireTreasurer();
+  const semesterId = formData.get("semesterId") as string;
+  const file = formData.get("file") as File | null;
+  if (!semesterId || !file || file.size === 0) {
+    return { ok: false, error: "Choose the bank's CSV export first." };
+  }
+
+  const bankRows = parseBankHistoryCsv(await file.text());
+  if (!bankRows.length) {
+    return {
+      ok: false,
+      error:
+        "No posted checks found — expected the bank's account history export, with Post Date, Check and Debit columns.",
+    };
+  }
+
+  const [semester, checks] = await Promise.all([
+    prisma.semester.findUnique({
+      where: { id: semesterId },
+      select: { startDate: true, endDate: true },
+    }),
+    prisma.check.findMany({
+      where: { semesterId, paymentMethod: "CHECK" },
+      select: {
+        id: true,
+        checkNumber: true,
+        recipientName: true,
+        amount: true,
+        date: true,
+        cleared: true,
+      },
+    }),
+  ]);
+  if (!semester) return { ok: false, error: "Semester not found." };
+
+  const recipientOf = new Map(checks.map((c) => [c.id, c.recipientName]));
+  const result = matchClearedChecks(checks, bankRows);
+
+  // One UPDATE per distinct post date, not per check — a first import can clear
+  // a whole semester's worth at once.
+  const idsByDate = new Map<number, string[]>();
+  for (const { check, postDate } of result.toClear) {
+    const ids = idsByDate.get(postDate.getTime());
+    if (ids) ids.push(check.id);
+    else idsByDate.set(postDate.getTime(), [check.id]);
+  }
+  if (idsByDate.size) {
+    await prisma.$transaction(
+      [...idsByDate].map(([ts, ids]) =>
+        prisma.check.updateMany({
+          where: { id: { in: ids }, cleared: false },
+          data: { cleared: true, clearedDate: new Date(ts) },
+        })
+      )
+    );
+  }
+
+  // The file reaches back years; only this semester's strays are worth flagging.
+  const start = semester.startDate.getTime();
+  const end = semester.endDate?.getTime() ?? Infinity;
+  const unrecorded = result.unmatched.filter((d) => {
+    const ts = d.postDate.getTime();
+    return ts >= start && ts <= end;
+  });
+
+  revalidatePath("/checks");
+  revalidatePath("/deposits");
+  revalidatePath("/");
+  return {
+    ok: true,
+    marked: result.toClear
+      .map(({ check, postDate }) => ({
+        checkNumber: check.checkNumber,
+        recipientName: recipientOf.get(check.id) ?? "",
+        amount: check.amount,
+        clearedDate: postDate.toISOString(),
+      }))
+      .sort((a, b) => b.clearedDate.localeCompare(a.clearedDate)),
+    alreadyCleared: result.alreadyCleared,
+    review: result.review.map((v) => ({
+      checkNumber: v.check.checkNumber,
+      recipientName: recipientOf.get(v.check.id) ?? "",
+      amount: v.check.amount,
+      cleared: v.check.cleared,
+      reason: v.reason,
+      bankCheckNumber: v.bankCheckNumber,
+      bankAmount: v.bankAmount,
+      bankDate: v.bankDate.toISOString(),
+    })),
+    unrecorded: unrecorded.map((d) => ({
+      checkNumber: d.checkNumber,
+      amount: d.amount,
+      postDate: d.postDate.toISOString(),
+    })),
+  };
 }
