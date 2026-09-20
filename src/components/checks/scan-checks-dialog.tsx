@@ -149,6 +149,7 @@ export function ScanChecksDialog({
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [current, setCurrent] = useState(0);
   const [batchCategory, setBatchCategory] = useState("");
+  const [batchEvent, setBatchEvent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -162,6 +163,7 @@ export function ScanChecksDialog({
     setDrafts([]);
     setCurrent(0);
     setBatchCategory("");
+    setBatchEvent("");
     setError(null);
     setSaving(false);
   }
@@ -260,6 +262,14 @@ export function ScanChecksDialog({
     setDrafts((prev) => prev.map((d) => ({ ...d, categoryId: catId })));
   }
 
+  // "none" is the picker's explicit "no event" row; drafts store that as "".
+  function applyEventToAll(eventId: string) {
+    setBatchEvent(eventId);
+    setDrafts((prev) =>
+      prev.map((d) => ({ ...d, eventId: eventId === "none" ? "" : eventId }))
+    );
+  }
+
   function removeCurrent() {
     const next = drafts.filter((_, i) => i !== current);
     if (next.length === 0) {
@@ -323,6 +333,14 @@ export function ScanChecksDialog({
   const mismatchCount = drafts.filter((d) => amountMismatch(d, openById)).length;
   const anyPayments = drafts.some((d) => d.kind === "payment");
   const anySettlements = drafts.some((d) => d.kind === "reimbursement");
+
+  // A Select's trigger prints its raw value unless the root is handed the
+  // labels — without these a category reads as its id instead of its name.
+  const categoryLabels = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+  const eventLabels = {
+    none: "— None —",
+    ...Object.fromEntries(events.map((e) => [e.id, e.name])),
+  };
 
   // Reimbursements another check in this batch already pays → that check's index.
   const claimedElsewhere = new Map<string, number>();
@@ -411,27 +429,64 @@ export function ScanChecksDialog({
           <div className="space-y-4">
             {anyPayments && (
             <div className="rounded-lg border bg-muted/30 p-3">
-              <Label className="text-xs">
-                {anySettlements ? "Category for all new payments" : "Category for all checks"}
-              </Label>
-              <Select
-                value={batchCategory}
-                onValueChange={(v) => applyCategoryToAll(v ?? "")}
-              >
-                <SelectTrigger className="mt-1 w-full">
-                  <SelectValue placeholder="Set one category for the whole batch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className={events.length > 0 ? "grid grid-cols-2 items-end gap-4" : undefined}>
+                <div className="min-w-0">
+                  <Label className="text-xs">
+                    {anySettlements ? "Category for all new payments" : "Category for all checks"}
+                  </Label>
+                  <Select
+                    value={batchCategory}
+                    onValueChange={(v) => applyCategoryToAll(v ?? "")}
+                    items={categoryLabels}
+                  >
+                    <SelectTrigger className="mt-1 w-full">
+                      <SelectValue
+                        placeholder={
+                          events.length > 0
+                            ? "Select a category"
+                            : "Set one category for the whole batch"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {events.length > 0 && (
+                  <div className="min-w-0">
+                    <Label className="text-xs">
+                      {anySettlements ? "Event for all new payments" : "Event for all checks"}
+                    </Label>
+                    <Select
+                      value={batchEvent}
+                      onValueChange={(v) => applyEventToAll(v ?? "")}
+                      items={eventLabels}
+                    >
+                      <SelectTrigger className="mt-1 w-full">
+                        <SelectValue placeholder="Optional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— None —</SelectItem>
+                        {events.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {anySettlements
-                  ? "Override individual ones below. Checks that pay reimbursements use the reimbursements' categories."
+                  ? `Override individual ones below. Checks that pay reimbursements use the reimbursements' ${
+                      events.length > 0 ? "categories and events" : "categories"
+                    }.`
                   : "Applies to every check — override individual ones below."}
               </p>
             </div>
@@ -596,6 +651,7 @@ export function ScanChecksDialog({
                 <Select
                   value={draft.paymentMethod}
                   onValueChange={(v) => setField("paymentMethod", (v ?? "CHECK") as PaymentMethod)}
+                  items={PAYMENT_LABELS}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -650,6 +706,7 @@ export function ScanChecksDialog({
                 <Select
                   value={draft.categoryId}
                   onValueChange={(v) => setField("categoryId", v ?? "")}
+                  items={categoryLabels}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a category" />
@@ -668,6 +725,7 @@ export function ScanChecksDialog({
                 <Select
                   value={draft.eventId || "none"}
                   onValueChange={(v) => setField("eventId", v && v !== "none" ? v : "")}
+                  items={eventLabels}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Optional" />
