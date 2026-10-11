@@ -56,3 +56,6 @@ next-env.d.ts
 
 # local DB backups
 /backups
+
+# one-off roster load — contains member names and emails
+/scripts/add-members.ts
