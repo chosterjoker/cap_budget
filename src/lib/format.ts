@@ -23,6 +23,15 @@ export function formatDate(date: Date | string) {
   }).format(new Date(date));
 }
 
+// Year-less `Oct 3`, for lists already scoped to one semester. UTC, as above.
+export function formatDateShort(date: Date | string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(date));
+}
+
 // `YYYY-MM-DD` value for an <input type="date">, taken from the date's UTC
 // components so it round-trips with how calendar dates are stored (UTC midnight)
 // and displayed (formatDate, above).

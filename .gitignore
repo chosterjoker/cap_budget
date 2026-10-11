@@ -53,3 +53,9 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# local DB backups
+/backups
+
+# one-off roster load — contains member names and emails
+/scripts/add-members.ts

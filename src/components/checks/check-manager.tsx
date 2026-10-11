@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EventSelectContent, type EventOption } from "@/components/common/event-select-content";
 import { toast } from "sonner";
 import type { PaymentMethod } from "@prisma/client";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
@@ -57,7 +58,6 @@ type CheckRow = {
 };
 
 type Category = { id: string; name: string };
-type EventOption = { id: string; name: string; date: Date };
 type Reimbursement = { id: string; name: string; amount: number; memberName: string };
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -360,14 +360,9 @@ export function CheckManager({
                         : events.find((e) => e.id === eventFilter)?.name ?? "All"}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <EventSelectContent events={events}>
                     <SelectItem value="all">All events</SelectItem>
-                    {events.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  </EventSelectContent>
                 </Select>
               </TableHead>
               <TableHead className="h-auto py-1.5">
@@ -668,23 +663,17 @@ function CheckForm({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <Label>Event</Label>
           <Select
             name="eventId"
             defaultValue={defaults?.eventId ?? undefined}
             items={Object.fromEntries(events.map((e) => [e.id, e.name]))}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Optional" />
             </SelectTrigger>
-            <SelectContent>
-              {events.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
+            <EventSelectContent events={events} />
           </Select>
         </div>
       </div>
