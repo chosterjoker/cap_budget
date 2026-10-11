@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EventSelectContent, type EventOption } from "@/components/common/event-select-content";
 import {
   Upload,
   Loader2,
@@ -45,7 +46,6 @@ import {
 } from "lucide-react";
 
 type Category = { id: string; name: string };
-type EventOption = { id: string; name: string };
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   CHECK: "Check",
@@ -470,14 +470,9 @@ export function ScanChecksDialog({
                       <SelectTrigger className="mt-1 w-full">
                         <SelectValue placeholder="Optional" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <EventSelectContent events={events}>
                         <SelectItem value="none">— None —</SelectItem>
-                        {events.map((e) => (
-                          <SelectItem key={e.id} value={e.id}>
-                            {e.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                      </EventSelectContent>
                     </Select>
                   </div>
                 )}
@@ -720,7 +715,7 @@ export function ScanChecksDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label>Event</Label>
                 <Select
                   value={draft.eventId || "none"}
@@ -730,14 +725,9 @@ export function ScanChecksDialog({
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Optional" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <EventSelectContent events={events}>
                     <SelectItem value="none">— None —</SelectItem>
-                    {events.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  </EventSelectContent>
                 </Select>
               </div>
             </div>
