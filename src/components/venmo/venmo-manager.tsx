@@ -1,13 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { createVenmoIncome, updateVenmoIncome, deleteVenmoIncome } from "@/actions/venmo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { StatTile, StatRow } from "@/components/common/stat-tile";
 import { EmptyRow } from "@/components/common/empty-state";
 import {
@@ -20,6 +29,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -43,6 +53,17 @@ type VenmoRow = {
   week: { weekNumber: number; label: string | null } | null;
 };
 
+// Checks paid via Venmo. Read-only here — they're edited on the Checks tab.
+type VenmoPayment = {
+  id: string;
+  checkNumber: string;
+  description: string;
+  recipientName: string;
+  amount: number;
+  date: Date;
+  event: { name: string } | null;
+};
+
 type Week = { id: string; weekNumber: number; label: string | null };
 
 type VenmoSummary = {
@@ -55,12 +76,14 @@ type VenmoSummary = {
 export function VenmoManager({
   semesterId,
   entries,
+  payments,
   weeks,
   summary,
   isTreasurer,
 }: {
   semesterId: string;
   entries: VenmoRow[];
+  payments: VenmoPayment[];
   weeks: Week[];
   summary: VenmoSummary;
   isTreasurer: boolean;
@@ -188,65 +211,153 @@ export function VenmoManager({
         </Card>
       )}
 
-      <div className="rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Event</TableHead>
-              <TableHead>Week</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              {isTreasurer && <TableHead />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.map((e) => (
-              <TableRow key={e.id}>
-                <TableCell>{formatDate(e.date)}</TableCell>
-                <TableCell>{e.description}</TableCell>
-                <TableCell>{e.eventName || "—"}</TableCell>
-                <TableCell>
-                  {e.week
-                    ? `W${e.week.weekNumber}${e.week.label ? ` (${e.week.label})` : ""}`
-                    : "—"}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatCurrency(e.amount)}
-                </TableCell>
-                {isTreasurer && (
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(e)}>
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          if (confirm("Delete this entry?")) {
-                            await deleteVenmoIncome(e.id);
-                            router.refresh();
-                          }
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </TableCell>
+      <Card>
+        <CardHeader>
+          <CardTitle>Collections</CardTitle>
+          <CardDescription>Money coming into Venmo</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Week</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  {isTreasurer && <TableHead />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entries.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell>{formatDate(e.date)}</TableCell>
+                    <TableCell>{e.description}</TableCell>
+                    <TableCell>{e.eventName || "—"}</TableCell>
+                    <TableCell>
+                      {e.week
+                        ? `W${e.week.weekNumber}${e.week.label ? ` (${e.week.label})` : ""}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrency(e.amount)}
+                    </TableCell>
+                    {isTreasurer && (
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setEditing(e)}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              if (confirm("Delete this entry?")) {
+                                await deleteVenmoIncome(e.id);
+                                router.refresh();
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+                {entries.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={isTreasurer ? 6 : 5}>
+                      <EmptyRow>No Venmo collections logged yet.</EmptyRow>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </TableRow>
-            ))}
-            {entries.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={isTreasurer ? 6 : 5}>
-                  <EmptyRow>No Venmo collections logged yet.</EmptyRow>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              </TableBody>
+              {entries.length > 0 && (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={4} className="font-medium">
+                      Total collected
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {formatCurrency(summary.collected)}
+                    </TableCell>
+                    {isTreasurer && <TableCell />}
+                  </TableRow>
+                </TableFooter>
+              )}
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Paid via Venmo</CardTitle>
+          <CardDescription>
+            Checks with Venmo as the payment method — these come out of the balance
+          </CardDescription>
+          <CardAction>
+            <Link
+              href="/checks"
+              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Edit on Checks
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Ref #</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Recipient</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell>{formatDate(p.date)}</TableCell>
+                    <TableCell className="tabular-nums">{p.checkNumber}</TableCell>
+                    <TableCell>{p.description}</TableCell>
+                    <TableCell>{p.recipientName}</TableCell>
+                    <TableCell>{p.event?.name ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      −{formatCurrency(p.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {payments.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <EmptyRow>No Venmo payments logged yet.</EmptyRow>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+              {payments.length > 0 && (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={5} className="font-medium">
+                      Total Venmoed
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      −{formatCurrency(summary.paid)}
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              )}
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>

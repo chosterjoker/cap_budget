@@ -21,7 +21,7 @@ export default async function VenmoPage() {
     );
   }
 
-  const [entries, weeks, summary] = await Promise.all([
+  const [entries, payments, weeks, summary] = await Promise.all([
     prisma.venmoIncome.findMany({
       where: { semesterId: semester.id },
       orderBy: { date: "desc" },
@@ -33,6 +33,20 @@ export default async function VenmoPage() {
         eventName: true,
         weekId: true,
         week: { select: { weekNumber: true, label: true } },
+      },
+    }),
+    // Same filter as getVenmoSummary, so the table adds up to "Paid via Venmo".
+    prisma.check.findMany({
+      where: { semesterId: semester.id, paymentMethod: "VENMO", isCarryover: false },
+      orderBy: { date: "desc" },
+      select: {
+        id: true,
+        checkNumber: true,
+        description: true,
+        recipientName: true,
+        amount: true,
+        date: true,
+        event: { select: { name: true } },
       },
     }),
     prisma.week.findMany({
@@ -51,6 +65,7 @@ export default async function VenmoPage() {
       <VenmoManager
         semesterId={semester.id}
         entries={entries}
+        payments={payments}
         weeks={weeks}
         summary={summary}
         isTreasurer={session?.user.role === "TREASURER"}
