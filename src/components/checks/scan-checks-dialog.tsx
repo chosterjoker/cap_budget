@@ -66,6 +66,8 @@ type Draft = {
   reimbursementIds: string[];
   // The selection was our guess, not the treasurer's — say so until they touch it.
   autoMatched: boolean;
+  // The scan wasn't sure of this one; nudge the treasurer to look closely.
+  needsReview: boolean;
   checkNumber: string;
   recipientName: string;
   amount: string;
@@ -85,6 +87,7 @@ function toDraft(p: ParsedCheck, suggested: string[] | null): Draft {
     kind: settles ? "reimbursement" : "payment",
     reimbursementIds: suggested ?? [],
     autoMatched: Boolean(suggested?.length),
+    needsReview: Boolean(p.needsReview),
     checkNumber: p.checkNumber ?? "",
     recipientName: p.recipientName ?? "",
     amount: p.amount != null ? String(p.amount) : "",
@@ -211,7 +214,7 @@ export function ScanChecksDialog({
   }
 
   function setField(
-    field: Exclude<keyof Draft, "kind" | "reimbursementIds" | "autoMatched">,
+    field: Exclude<keyof Draft, "kind" | "reimbursementIds" | "autoMatched" | "needsReview">,
     value: string
   ) {
     patchCurrent({ [field]: value });
@@ -383,7 +386,7 @@ export function ScanChecksDialog({
         {phase === "pick" && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Take one photo of all the checks together (up to ~10). We&apos;ll
+              Take one photo of all the checks together. We&apos;ll
               read each one and open a stack of pre-filled forms for you to review.
               {reimbursements.length > 0 &&
                 " A check made out to a member with open reimbursements is matched to them, so saving it marks them paid."}
@@ -545,6 +548,13 @@ export function ScanChecksDialog({
                 <Trash2 className="h-4 w-4" /> Remove
               </Button>
             </div>
+
+            {draft.needsReview && (
+              <p className="rounded-md bg-warning-muted px-2 py-1.5 text-xs text-warning-fg">
+                This one was hard to read — check the number and amount against the
+                paper check. If it&apos;s blank or voided, remove it.
+              </p>
+            )}
 
             {/* What this check is for. Hidden when nothing is owed, since then
                 every check can only be a new payment. */}
