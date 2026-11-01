@@ -53,6 +53,13 @@ For each check:
 - "date": the handwritten date, as "YYYY-MM-DD". Numeric dates are month/day/year. A two-digit year means 20YY, and checks are recent, so resolve an ambiguous year to the one closest to today.
 - "memo": the "For" line, or null if it's empty.
 
+The image may instead be a screenshot or photo of a table or list of checks (for example a spreadsheet, a bank page, or a chat message) rather than the checks themselves. If so, return one entry per row, copying each value exactly as shown, and ignore any row-counter column such as "#":
+- "checkNumber": the check number column.
+- "recipientName": the payee, without notes such as "(uncertain)" or "(unclear)". Drop a trailing "...".
+- "courtesyAmount": the amount column. "amountInWords" is null unless the table has that text.
+- "date" and "memo": only if the table has them.
+Use null for a value marked "Unclear", "Unknown", "N/A" or similar, and still include the row.
+
 Order entries by check number. If the image contains no checks, return { "checks": [] }. Return only the JSON object, nothing else.`;
 
 /** Low-level: POST an image + prompt to OpenAI Vision, return the parsed JSON object. */
