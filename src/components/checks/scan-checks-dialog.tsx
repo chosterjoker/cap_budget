@@ -186,7 +186,7 @@ export function ScanChecksDialog({
       const parsed = await scanChecks(fd);
       if (!parsed.length) {
         setPhase("pick");
-        setError("Couldn't read any checks from that photo. Try a flatter, well-lit shot.");
+        setError("Couldn't read any checks from that image. For a photo, try a flatter, well-lit shot.");
         return;
       }
       // Match in order, so two checks in one photo never claim the same
@@ -386,8 +386,8 @@ export function ScanChecksDialog({
         {phase === "pick" && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Take one photo of all the checks together. We&apos;ll
-              read each one and open a stack of pre-filled forms for you to review.
+              Take one photo of all the checks together, or upload a screenshot of
+              a table listing them. We&apos;ll read each one and open a stack of pre-filled forms for you to review.
               {reimbursements.length > 0 &&
                 " A check made out to a member with open reimbursements is matched to them, so saving it marks them paid."}
             </p>
@@ -406,9 +406,9 @@ export function ScanChecksDialog({
                 <Upload className="h-4 w-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-medium">Choose a photo of your checks</span>
+                <span className="block font-medium">Choose a photo or screenshot</span>
                 <span className="block text-xs text-muted-foreground">
-                  Handwriting is read best from a flat, well-lit shot.
+                  Handwriting on checks is read best from a flat, well-lit shot.
                 </span>
               </span>
               <span className="shrink-0 rounded-md border bg-background px-2.5 py-1 text-xs font-medium">
@@ -423,7 +423,7 @@ export function ScanChecksDialog({
         {phase === "scanning" && (
           <div className="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />
-            Reading checks from your photo…
+            Reading checks from your image…
           </div>
         )}
 
