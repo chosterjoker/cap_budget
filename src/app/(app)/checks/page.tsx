@@ -9,6 +9,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CalendarPlus, Download } from "lucide-react";
 
+// scanChecks waits on several vision reads of one photo, each up to ~50s.
+export const maxDuration = 60;
+
 export default async function ChecksPage() {
   const session = await auth();
   const semester = await getActiveSemester();
