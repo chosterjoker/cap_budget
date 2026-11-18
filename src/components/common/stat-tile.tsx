@@ -28,22 +28,20 @@ export function StatTile({
 }) {
   return (
     <Card>
-      {/* Card already owns the vertical padding (py-4) — CardContent must only
+      {/* Card already owns the vertical padding (py-5) — CardContent must only
           add horizontal padding, or the tile ends up hollow. */}
       <CardContent>
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {label}
-        </p>
+        <p className="eyebrow">{label}</p>
         <p
           className={cn(
-            "mt-1.5 text-2xl font-semibold leading-none tracking-tight",
+            "mt-3 font-heading text-[1.75rem] font-medium leading-none tracking-[-0.03em]",
             TONE[tone]
           )}
         >
           {value}
         </p>
         {hint && (
-          <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
         )}
       </CardContent>
     </Card>

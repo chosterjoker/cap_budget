@@ -62,14 +62,11 @@ export function BudgetHealth({
 
   return (
     <Card className="overflow-hidden">
-      {/* px only — Card contributes py-4, so py-2 here lands on an even 24px
-          all round rather than 40px top/bottom against 24px sides. */}
-      <CardContent className="grid gap-8 px-6 py-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-12">
+      {/* Card contributes py-5, so py-2 here lands on an even 28px all round. */}
+      <CardContent className="grid gap-8 px-7 py-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-12">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Available to spend
-            </p>
+            <p className="eyebrow">Available to spend</p>
             {status && StatusIcon && (
               <span
                 title={status.detail}
@@ -87,13 +84,13 @@ export function BudgetHealth({
           {/* Hero figure: proportional figures, same sans as everything else. */}
           <p
             className={cn(
-              "mt-2 text-5xl font-semibold leading-none tracking-tight",
+              "mt-3 font-heading text-5xl font-medium leading-none tracking-[-0.045em] md:text-6xl",
               overspent && "text-danger-fg"
             )}
           >
             {formatCurrency(availableBudget)}
           </p>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-3 text-sm text-muted-foreground">
             of {formatCurrency(spendingPower)} spending power
             {venmoTotal > 0 && (
               <> · includes {formatCurrency(venmoTotal)} Venmo income</>

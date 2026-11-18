@@ -217,7 +217,7 @@ export function VenmoManager({
           <CardDescription>Money coming into Venmo</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border">
+          <div className="overflow-hidden rounded-xl border border-border/70">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -309,7 +309,7 @@ export function VenmoManager({
           </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border">
+          <div className="overflow-hidden rounded-xl border border-border/70">
             <Table>
               <TableHeader>
                 <TableRow>

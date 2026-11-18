@@ -41,18 +41,18 @@ function roleLabel(role: Role) {
 export function UserMenu({ user }: { user: SessionUser }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-lg p-2 hover:bg-muted">
+      <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-foreground/[0.04] aria-expanded:bg-foreground/[0.04]">
         <Avatar>
           <AvatarImage src={user.image ?? undefined} />
           <AvatarFallback>{initialsFor(user)}</AvatarFallback>
         </Avatar>
         <div className="flex min-w-0 flex-1 flex-col items-start text-left text-sm">
-          <span className="w-full truncate font-medium">
+          <span className="w-full truncate text-[0.8125rem] font-medium leading-tight">
             {user.name || user.email}
           </span>
-          <Badge variant="secondary" className="text-[10px]">
+          <span className="text-xs leading-tight text-muted-foreground">
             {roleLabel(user.role)}
-          </Badge>
+          </span>
         </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

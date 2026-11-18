@@ -256,10 +256,10 @@ export function BudgetGrid({
           </Dialog>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="surface overflow-x-auto">
         <table className="w-full min-w-[900px] border-collapse text-sm">
           <thead>
-            <tr className="border-b bg-muted/50">
+            <tr className="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
               <th className={cn(FROZEN.cat, "bg-muted px-3 py-2 text-left font-medium")}>
                 Category
               </th>
@@ -284,19 +284,19 @@ export function BudgetGrid({
           <tbody>
             {rows.map((row) => (
               <tr key={row.category.id} className="border-b hover:bg-muted/30">
-                <td className={cn(FROZEN.cat, "bg-background px-3 py-2 font-medium")}>
+                <td className={cn(FROZEN.cat, "bg-card px-3 py-2 font-medium")}>
                   {row.category.name}
                 </td>
-                <td className={cn(FROZEN.budget, "bg-background px-2 py-2 text-right tabular-nums")}>
+                <td className={cn(FROZEN.budget, "bg-card px-2 py-2 text-right tabular-nums")}>
                   {formatCurrency(row.category.allocatedAmount)}
                 </td>
-                <td className={cn(FROZEN.spent, "bg-background px-2 py-2 text-right tabular-nums")}>
+                <td className={cn(FROZEN.spent, "bg-card px-2 py-2 text-right tabular-nums")}>
                   {formatCurrency(row.spent)}
                 </td>
                 <td
                   className={cn(
                     FROZEN.pct,
-                    "bg-background px-2 py-2 text-right tabular-nums",
+                    "bg-card px-2 py-2 text-right tabular-nums",
                     cellColor(row.percentRemaining)
                   )}
                 >

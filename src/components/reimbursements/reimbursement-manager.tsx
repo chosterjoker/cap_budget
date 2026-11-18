@@ -362,7 +362,7 @@ export function ReimbursementManager({
         </div>
       </div>
 
-      <div className="rounded-lg border">
+      <div className="surface overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>

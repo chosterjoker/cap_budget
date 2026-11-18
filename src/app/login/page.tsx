@@ -14,11 +14,11 @@ export default async function LoginPage() {
   if (session?.user) redirect("/");
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-muted/40 p-6">
-      <div className="grid w-full max-w-3xl overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-foreground/10 lg:min-h-[24rem] lg:grid-cols-2">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-canvas p-6">
+      <div className="surface grid w-full max-w-3xl overflow-hidden p-2 shadow-raised lg:min-h-[26rem] lg:grid-cols-2">
         {/* First in the DOM so it sits above the form on narrow screens;
             `order` moves it to the right column once the split kicks in. */}
-        <div className="relative h-28 sm:h-36 lg:order-last lg:h-auto">
+        <div className="relative h-28 overflow-hidden rounded-xl sm:h-36 lg:order-last lg:h-auto">
           <Image
             src="/capandgown.webp"
             alt="The Cap & Gown clubhouse at dusk"
@@ -31,7 +31,7 @@ export default async function LoginPage() {
           />
         </div>
 
-        <div className="flex flex-col justify-center gap-6 p-8 sm:p-10">
+        <div className="flex flex-col justify-center gap-7 p-6 sm:p-9">
           <div>
             <Image
               src="/cap_logo.png"
@@ -39,12 +39,12 @@ export default async function LoginPage() {
               width={1068}
               height={1374}
               priority
-              className="mb-4 h-10 w-auto"
+              className="mb-6 h-10 w-auto"
             />
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Cap &amp; Gown
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold">Budget &amp; Tracking</h1>
+            <p className="eyebrow">Cap &amp; Gown</p>
+            <h1 className="mt-2 text-[1.75rem] font-medium leading-tight tracking-[-0.035em]">
+              Budget &amp; Tracking
+            </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Sign in to manage semester budgets, checks, and reimbursements.
             </p>

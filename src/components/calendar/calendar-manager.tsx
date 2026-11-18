@@ -341,7 +341,7 @@ export function CalendarManager({
         if (!uniqueTypes.length) return null;
         return (
           <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="eyebrow mb-2">
               Event types
             </p>
             <div className="flex flex-wrap gap-2">

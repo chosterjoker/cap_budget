@@ -143,7 +143,7 @@ export function DepositTracker({
         </Card>
       )}
 
-      <div className="rounded-lg border">
+      <div className="surface overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
