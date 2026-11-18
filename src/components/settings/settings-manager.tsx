@@ -562,7 +562,7 @@ function BudgetTargetPanel({
     <div className="rounded-lg border bg-muted/30 p-3">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <p className="eyebrow">
             Total budget
           </p>
           <div className="flex items-center gap-2">
@@ -599,10 +599,10 @@ function BudgetTargetPanel({
           </div>
         </div>
         <div className="text-right">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <p className="eyebrow">
             Allocated
           </p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">
+          <p className="mt-2 font-heading text-2xl font-medium tracking-[-0.03em] tabular-nums">
             {formatCurrency(allocatedTotal)}
           </p>
           {semester.totalBudget > 0 && (

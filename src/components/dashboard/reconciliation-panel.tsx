@@ -147,7 +147,7 @@ export function ReconciliationPanel({
             No reconciliations recorded yet.
           </p>
         ) : (
-          <div className="rounded-lg border">
+          <div className="overflow-hidden rounded-xl border border-border/70">
             <Table>
               <TableHeader>
                 <TableRow>

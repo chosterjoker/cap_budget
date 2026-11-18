@@ -28,10 +28,10 @@ export function EmptyState({
         className
       )}
     >
-      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-        <Icon className="h-6 w-6" />
+      <span className="mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-card text-muted-foreground shadow-surface ring-1 ring-foreground/[0.07]">
+        <Icon className="h-5 w-5" strokeWidth={1.75} />
       </span>
-      <h2 className="text-xl font-semibold">{title}</h2>
+      <h2 className="text-xl font-medium tracking-[-0.025em]">{title}</h2>
       {description && (
         <p className="text-sm text-muted-foreground">{description}</p>
       )}
@@ -47,6 +47,6 @@ export function EmptyState({
 /** Smaller variant for an empty region inside a card or table. */
 export function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <p className="py-8 text-center text-sm text-muted-foreground">{children}</p>
+    <p className="py-10 text-center text-sm text-muted-foreground">{children}</p>
   );
 }

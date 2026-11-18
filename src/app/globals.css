@@ -5,6 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-canvas: var(--canvas);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
@@ -50,6 +51,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --shadow-surface: var(--shadow-surface);
+  --shadow-raised: var(--shadow-raised);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -63,24 +66,35 @@
   /* Keeps native controls — the date and number inputs this app leans on,
      scrollbars, focus rings — in step with the chosen theme. */
   color-scheme: light;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Neutrals carry a faint warm cast (hue ~85) so the surfaces read as paper
+     rather than screen-grey; ink leans slightly cool for crisp contrast.
+     Three surface steps, back to front:
+       canvas      — the frame: sidebar and the gutter around the sheet
+       background  — the sheet every page sits on
+       card        — panels on the sheet */
+  --canvas: oklch(0.958 0.004 85);
+  --background: oklch(0.987 0.002 85);
+  --foreground: oklch(0.2 0.008 265);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0.008 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.2 0.008 265);
+  --primary: oklch(0.23 0.01 265);
+  --primary-foreground: oklch(0.985 0.002 85);
+  --secondary: oklch(0.955 0.004 85);
+  --secondary-foreground: oklch(0.23 0.01 265);
+  --muted: oklch(0.955 0.004 85);
+  --muted-foreground: oklch(0.5 0.01 265);
+  --accent: oklch(0.948 0.005 85);
+  --accent-foreground: oklch(0.23 0.01 265);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.915 0.004 85);
+  --input: oklch(0.895 0.005 85);
+  --ring: oklch(0.68 0.01 265);
+  --shadow-surface: 0 1px 2px oklch(0.2 0.01 265 / 0.04),
+    0 1px 1px oklch(0.2 0.01 265 / 0.02);
+  --shadow-raised: 0 1px 2px oklch(0.2 0.01 265 / 0.05),
+    0 4px 16px -4px oklch(0.2 0.01 265 / 0.06);
   /* Data-viz palette. Hues are assigned in this fixed order and never cycled;
      the ordering is what keeps adjacent pairs separable under colour-vision
      deficiency. Validated against this app's card surface (#ffffff light,
@@ -108,36 +122,41 @@
   --danger-muted: #fbeceb;
 
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: var(--canvas);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  --canvas: oklch(0.13 0 0);
+  --background: oklch(0.165 0 0);
+  --foreground: oklch(0.96 0 0);
+  /* Card stays at #171717 — the surface the chart palette was validated on. */
   --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.22 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.95 0 0);
+  --primary-foreground: oklch(0.2 0 0);
+  --secondary: oklch(0.255 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.24 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --accent: oklch(0.26 0 0);
+  --accent-foreground: oklch(0.96 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.52 0 0);
+  /* Shadows vanish on dark surfaces; the hairline ring does the lifting. */
+  --shadow-surface: 0 0 #0000;
+  --shadow-raised: 0 8px 24px -8px oklch(0 0 0 / 0.5);
   /* The same hues re-stepped for the dark surface — chosen for the dark
      lightness band, not an automatic flip of the light values. */
   --chart-1: #3987e5;
@@ -155,14 +174,28 @@
   --warning-muted: oklch(0.7 0.15 80 / 15%);
   --danger-fg: #e66767;
   --danger-muted: oklch(0.6 0.18 25 / 18%);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* The one panel treatment: cards, table wrappers and anything else that sits
+   on the sheet. A hairline ring instead of a border so it never doubles up
+   against a table's own row borders, plus a barely-there shadow in light. */
+@utility surface {
+  border-radius: var(--radius-2xl);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  box-shadow:
+    var(--shadow-surface),
+    0 0 0 1px color-mix(in oklch, var(--foreground) 7%, transparent);
+}
+
+/* Small uppercase label used above figures and section groups. */
+@utility eyebrow {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
 }
 
 @layer base {
@@ -171,11 +204,17 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
   }
   html {
     @apply font-sans;
   }
   h1, h2, h3, h4 {
-    @apply font-heading tracking-tight;
+    @apply font-heading;
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background-color: color-mix(in oklch, var(--chart-1) 22%, transparent);
   }
 }

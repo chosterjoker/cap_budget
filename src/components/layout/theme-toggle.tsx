@@ -42,7 +42,7 @@ export function ThemeToggle({
       role="radiogroup"
       aria-label="Colour theme"
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5",
+        "inline-flex items-center gap-0.5 rounded-lg bg-foreground/[0.045] p-0.5",
         className
       )}
     >
@@ -61,7 +61,7 @@ export function ThemeToggle({
               "flex flex-1 items-center justify-center rounded-md text-muted-foreground transition-colors",
               "hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               showLabels ? "h-9 gap-1.5 text-sm font-medium" : "h-7",
-              active && "bg-background text-foreground shadow-sm"
+              active && "bg-card text-foreground shadow-surface ring-1 ring-foreground/[0.06]"
             )}
           >
             <Icon className={showLabels ? "h-4 w-4" : "h-3.5 w-3.5"} />

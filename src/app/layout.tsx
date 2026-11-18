@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
+import { Inter, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -8,13 +8,15 @@ const sans = Inter({
   subsets: ["latin"],
 });
 
-const heading = Bricolage_Grotesque({
+// Geist for display type (page titles, hero figures) over Inter for running
+// text: a crisp, slightly condensed face that holds up at tight tracking.
+const heading = Geist({
   variable: "--font-heading",
   subsets: ["latin"],
 });
 
-const mono = JetBrains_Mono({
-  variable: "--tabular-nums",
+const mono = Geist_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
 });
 
