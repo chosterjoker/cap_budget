@@ -260,11 +260,11 @@ export function ReimbursementManager({
     return t;
   }, [filtered]);
 
-  // The treasurer's own reimbursements: submitted by them, for themselves.
+  // Reimbursements owed to the current user: they're the Member. Who submitted
+  // it doesn't matter — officers often file for the person who paid.
   const isMine = useCallback(
-    (r: Reimbursement) =>
-      r.officer.id === currentUserId && memberKey(payeeOf(r)) === memberKey(currentUserName),
-    [currentUserId, currentUserName]
+    (r: Reimbursement) => memberKey(payeeOf(r)) === memberKey(currentUserName),
+    [currentUserName]
   );
 
   // Everything the club owes the current treasurer — members they paid
