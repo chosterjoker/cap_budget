@@ -9,6 +9,7 @@ import {
   parseReceiptFromImage,
   type ParsedReceipt,
 } from "@/lib/ocr";
+import type { PaymentMethod, ReimbursementStatus } from "@prisma/client";
 
 /**
  * Extract date/amount/description from an uploaded receipt image without
@@ -101,7 +102,7 @@ export async function updateReimbursement(
     eventId: string | null;
     tags: string | null;
     notes: string | null;
-    status: "PENDING" | "APPROVED" | "PAID";
+    status: ReimbursementStatus;
   }>
 ) {
   const session = await requireSession();
@@ -111,6 +112,10 @@ export async function updateReimbursement(
   const isTreasurer = session.user.role === "TREASURER";
   if (!isOwner && !isTreasurer) throw new Error("Forbidden");
   if (data.status && !isTreasurer) throw new Error("Only treasurer can change status");
+  // Once the treasurer has paid it out, the amount is settled — only they can change it.
+  if (item.status === "FRONTED" && !isTreasurer) {
+    throw new Error("The treasurer already paid this — ask them to change it.");
+  }
 
   // Don't let an edit strip the required category off an existing reimbursement.
   if (data.categoryId !== undefined && !data.categoryId) {
@@ -122,6 +127,7 @@ export async function updateReimbursement(
     data: {
       ...data,
       date: data.date ? new Date(data.date) : undefined,
+      ...(data.status ? frontedFieldsFor(data.status, item, session.user.id) : {}),
     },
   });
   revalidatePath("/reimbursements");
@@ -129,16 +135,57 @@ export async function updateReimbursement(
   revalidatePath("/");
 }
 
-export async function updateReimbursementStatus(
-  id: string,
-  status: "PENDING" | "APPROVED" | "PAID"
+// Keeps the fronted-by fields in step with a hand-set status. Choosing
+// "Paid by treasurer" stamps the current treasurer if nobody was recorded;
+// moving back to PENDING/APPROVED means nobody has paid the member yet, so the
+// record is wiped. PAID keeps it — that's the history of who was repaid.
+function frontedFieldsFor(
+  status: ReimbursementStatus,
+  item: { frontedById: string | null },
+  treasurerId: string
 ) {
-  await requireTreasurer();
-  await prisma.reimbursement.update({
-    where: { id },
-    data: { status },
+  if (status === "FRONTED" && !item.frontedById) {
+    return { frontedById: treasurerId, frontedAt: new Date() };
+  }
+  if (status === "PENDING" || status === "APPROVED") {
+    return { frontedById: null, frontedAt: null, frontedMethod: null };
+  }
+  return {};
+}
+
+/**
+ * The treasurer paid these members personally (Venmo, cash, …). The members
+ * are now whole, but the club owes the treasurer — the reimbursements stay
+ * unpaid on the books until a check to the treasurer settles them.
+ *
+ * Returns a result instead of throwing so the message survives production.
+ */
+export async function frontReimbursements(
+  ids: string[],
+  method: PaymentMethod
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const session = await requireTreasurer();
+  if (!ids.length) return { ok: false, error: "Pick at least one reimbursement." };
+  const { count } = await prisma.reimbursement.updateMany({
+    where: {
+      id: { in: ids },
+      checkId: null,
+      status: { in: ["PENDING", "APPROVED"] },
+    },
+    data: {
+      status: "FRONTED",
+      frontedById: session.user.id,
+      frontedAt: new Date(),
+      frontedMethod: method,
+    },
   });
+  if (count === 0) {
+    return { ok: false, error: "Already paid — refresh to see the latest." };
+  }
   revalidatePath("/reimbursements");
+  revalidatePath("/checks");
+  revalidatePath("/");
+  return { ok: true, count };
 }
 
 export async function deleteReimbursement(id: string) {
@@ -152,6 +199,91 @@ export async function deleteReimbursement(id: string) {
     throw new Error("Forbidden");
   }
   if (item.status === "PAID") throw new Error("Cannot delete paid reimbursement");
+  if (item.status === "FRONTED" && session.user.role !== "TREASURER") {
+    throw new Error("The treasurer already paid this — ask them to remove it.");
+  }
   await prisma.reimbursement.delete({ where: { id } });
   revalidatePath("/reimbursements");
+}
+
+export type BulkResult =
+  | { ok: true; count: number; skipped: number }
+  | { ok: false; error: string };
+
+// Rows the caller may batch-edit or delete: the treasurer can touch anything
+// not yet paid by check; an officer only their own, and only before the
+// treasurer has paid it out.
+async function bulkScope(ids: string[]) {
+  const session = await requireSession();
+  const isTreasurer = session.user.role === "TREASURER";
+  return {
+    session,
+    isTreasurer,
+    where: {
+      id: { in: ids },
+      checkId: null,
+      status: isTreasurer
+        ? { not: "PAID" as const }
+        : { in: ["PENDING" as const, "APPROVED" as const] },
+      ...(isTreasurer ? {} : { officerId: session.user.id }),
+    },
+  };
+}
+
+/**
+ * Apply one change to many reimbursements at once. Rows the caller can't
+ * change (paid, or someone else's) are skipped and counted, not failed, so a
+ * select-all over a mixed list still does the right thing for the rest.
+ *
+ * Status here is only PENDING/APPROVED: FRONTED goes through
+ * `frontReimbursements` (it needs a method) and PAID through a check.
+ */
+export async function bulkUpdateReimbursements(
+  ids: string[],
+  data: {
+    status?: "PENDING" | "APPROVED";
+    categoryId?: string;
+    eventId?: string | null;
+  }
+): Promise<BulkResult> {
+  if (!ids.length) return { ok: false, error: "Nothing selected." };
+  const { isTreasurer, where } = await bulkScope(ids);
+  if (data.status && !isTreasurer) {
+    return { ok: false, error: "Only the treasurer can change status." };
+  }
+  if (data.categoryId !== undefined && !data.categoryId) {
+    return { ok: false, error: "Pick a budget category." };
+  }
+  const { count } = await prisma.reimbursement.updateMany({
+    where,
+    data: {
+      ...(data.categoryId ? { categoryId: data.categoryId } : {}),
+      ...(data.eventId !== undefined ? { eventId: data.eventId } : {}),
+      ...(data.status
+        ? {
+            status: data.status,
+            // Back to unpaid: nobody has paid the member, so no fronted record.
+            frontedById: null,
+            frontedAt: null,
+            frontedMethod: null,
+          }
+        : {}),
+    },
+  });
+  revalidatePath("/reimbursements");
+  revalidatePath("/checks");
+  revalidatePath("/budget");
+  revalidatePath("/");
+  return { ok: true, count, skipped: ids.length - count };
+}
+
+export async function bulkDeleteReimbursements(ids: string[]): Promise<BulkResult> {
+  if (!ids.length) return { ok: false, error: "Nothing selected." };
+  const { where } = await bulkScope(ids);
+  const { count } = await prisma.reimbursement.deleteMany({ where });
+  revalidatePath("/reimbursements");
+  revalidatePath("/checks");
+  revalidatePath("/budget");
+  revalidatePath("/");
+  return { ok: true, count, skipped: ids.length - count };
 }

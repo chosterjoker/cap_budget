@@ -194,6 +194,11 @@ export async function deleteCheck(id: string) {
     // Remove the auto-created expense so "spent" drops back down.
     prisma.expense.deleteMany({ where: { checkId: id } }),
     // Un-settle any reimbursements this check paid out — they're owed again.
+    // Ones the treasurer had fronted go back to being owed to the treasurer.
+    prisma.reimbursement.updateMany({
+      where: { checkId: id, frontedById: { not: null } },
+      data: { checkId: null, status: "FRONTED" },
+    }),
     prisma.reimbursement.updateMany({
       where: { checkId: id },
       data: { checkId: null, status: "APPROVED" },

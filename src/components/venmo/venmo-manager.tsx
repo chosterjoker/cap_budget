@@ -42,11 +42,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { LoggedAt } from "@/components/common/logged-at";
 
 type VenmoRow = {
   id: string;
   amount: number;
   date: Date;
+  createdAt: Date;
   description: string;
   eventName: string | null;
   weekId: string | null;
@@ -61,6 +63,7 @@ type VenmoPayment = {
   recipientName: string;
   amount: number;
   date: Date;
+  createdAt: Date;
   event: { name: string } | null;
 };
 
@@ -232,7 +235,10 @@ export function VenmoManager({
               <TableBody>
                 {entries.map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell>{formatDate(e.date)}</TableCell>
+                    <TableCell>
+                      {formatDate(e.date)}
+                      <LoggedAt date={e.createdAt} />
+                    </TableCell>
                     <TableCell>{e.description}</TableCell>
                     <TableCell>{e.eventName || "—"}</TableCell>
                     <TableCell>
@@ -324,7 +330,10 @@ export function VenmoManager({
               <TableBody>
                 {payments.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell>{formatDate(p.date)}</TableCell>
+                    <TableCell>
+                      {formatDate(p.date)}
+                      <LoggedAt date={p.createdAt} />
+                    </TableCell>
                     <TableCell className="tabular-nums">{p.checkNumber}</TableCell>
                     <TableCell>{p.description}</TableCell>
                     <TableCell>{p.recipientName}</TableCell>

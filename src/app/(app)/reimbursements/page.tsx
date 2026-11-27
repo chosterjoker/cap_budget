@@ -27,7 +27,13 @@ export default async function ReimbursementsPage() {
     prisma.reimbursement.findMany({
       where: { semesterId: semester.id },
       orderBy: { date: "desc" },
-      include: { officer: true, category: true, event: true },
+      include: {
+        officer: true,
+        category: true,
+        event: true,
+        frontedBy: { select: { id: true, name: true, email: true } },
+        check: { select: { checkNumber: true } },
+      },
     }),
     prisma.user.findMany({
       where: {
