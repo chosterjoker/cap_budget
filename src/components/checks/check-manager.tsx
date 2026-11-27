@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { LoggedAt } from "@/components/common/logged-at";
 import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { createCheck, updateCheck, deleteCheck } from "@/actions/checks";
 import { ScanChecksDialog } from "@/components/checks/scan-checks-dialog";
@@ -44,6 +45,7 @@ type CheckRow = {
   description: string;
   amount: number;
   date: Date;
+  createdAt: Date;
   recipientName: string;
   paymentMethod: PaymentMethod;
   cleared: boolean;
@@ -457,7 +459,10 @@ export function CheckManager({
                 <TableCell>
                   <Badge variant="outline">{PAYMENT_LABELS[c.paymentMethod]}</Badge>
                 </TableCell>
-                <TableCell>{formatDate(c.date)}</TableCell>
+                <TableCell>
+                  {formatDate(c.date)}
+                  <LoggedAt date={c.createdAt} />
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{formatCurrency(c.amount)}</TableCell>
                 <TableCell>
                   {c.cleared ? (

@@ -120,7 +120,12 @@ export async function GET(
   } else if (type === "reimbursements") {
     const items = await prisma.reimbursement.findMany({
       where: { semesterId },
-      include: { officer: true, category: true },
+      include: {
+        officer: true,
+        category: true,
+        frontedBy: { select: { email: true } },
+        check: { select: { checkNumber: true } },
+      },
       orderBy: { date: "desc" },
     });
     const headers = [
@@ -132,6 +137,9 @@ export async function GET(
       "Category",
       "Tags",
       "Status",
+      "Paid by treasurer",
+      "Check #",
+      "Logged at",
     ];
     const lines = [headers.map(csvEscape).join(",")];
     for (const r of items) {
@@ -145,6 +153,9 @@ export async function GET(
           r.category?.name ?? "",
           r.tags ?? "",
           r.status,
+          r.frontedBy?.email ?? "",
+          r.check?.checkNumber ?? "",
+          r.createdAt.toISOString(),
         ]
           .map(csvEscape)
           .join(",")

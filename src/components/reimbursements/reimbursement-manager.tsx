@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { downscaleImage } from "@/lib/image";
@@ -10,8 +10,17 @@ import {
   deleteReimbursement,
   scanReceipt,
 } from "@/actions/reimbursements";
-import { createCheck } from "@/actions/checks";
+import { createCheck, createChecks } from "@/actions/checks";
+import {
+  frontReimbursements,
+  bulkUpdateReimbursements,
+  bulkDeleteReimbursements,
+  type BulkResult,
+} from "@/actions/reimbursements";
 import { CameraCapture } from "@/components/common/camera-capture";
+import { LoggedAt } from "@/components/common/logged-at";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { PaymentMethod, ReimbursementStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +50,30 @@ import {
 import { EventSelectContent, type EventOption } from "@/components/common/event-select-content";
 import { toast } from "sonner";
 import Image from "next/image";
-import { ArrowDown, ArrowUp, ArrowUpDown, Sparkles, Loader2, Upload, Check, Camera } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Sparkles,
+  Loader2,
+  Upload,
+  Check,
+  Camera,
+  HandCoins,
+  ChevronDown,
+  Landmark,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Reimbursement = {
   id: string;
@@ -49,7 +81,8 @@ type Reimbursement = {
   memberName: string | null;
   amount: number;
   date: Date;
-  status: string;
+  createdAt: Date;
+  status: ReimbursementStatus;
   categoryId: string | null;
   eventId: string | null;
   tags: string | null;
@@ -59,7 +92,28 @@ type Reimbursement = {
   officer: { id: string; name: string | null; email: string };
   category: { name: string } | null;
   event: { name: string } | null;
+  frontedBy: Officer | null;
+  frontedAt: Date | null;
+  frontedMethod: PaymentMethod | null;
+  check: { checkNumber: string } | null;
 };
+
+const STATUS_LABEL: Record<ReimbursementStatus, string> = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  // Paid by the treasurer personally; the club still owes the treasurer.
+  FRONTED: "Fronted",
+  PAID: "Paid",
+};
+
+// How the treasurer can pay a member out of pocket. A paper check from a
+// personal account is possible but rare, so it sits under "Other".
+const FRONT_METHODS = {
+  VENMO: "Venmo",
+  CASH: "Cash",
+  OTHER: "Other",
+} as const satisfies Partial<Record<PaymentMethod, string>>;
+type FrontMethod = keyof typeof FRONT_METHODS;
 
 type Officer = { id: string; name: string | null; email: string };
 type Category = { id: string; name: string };
@@ -121,7 +175,7 @@ export function ReimbursementManager({
   const [officerFilter, setOfficerFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [eventFilter, setEventFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "PENDING" | "APPROVED" | "PAID">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ReimbursementStatus>("all");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -195,15 +249,103 @@ export function ReimbursementManager({
   }, [filtered, sortKey, sortDir]);
 
   const totals = useMemo(() => {
-    const t = { all: 0, pending: 0, approved: 0, paid: 0 };
+    const t = { all: 0, pending: 0, approved: 0, fronted: 0, paid: 0 };
     for (const r of filtered) {
       t.all += r.amount;
       if (r.status === "PENDING") t.pending += r.amount;
       else if (r.status === "APPROVED") t.approved += r.amount;
+      else if (r.status === "FRONTED") t.fronted += r.amount;
       else if (r.status === "PAID") t.paid += r.amount;
     }
     return t;
   }, [filtered]);
+
+  // The treasurer's own reimbursements: submitted by them, for themselves.
+  const isMine = useCallback(
+    (r: Reimbursement) =>
+      r.officer.id === currentUserId && memberKey(payeeOf(r)) === memberKey(currentUserName),
+    [currentUserId, currentUserName]
+  );
+
+  // Everything the club owes the current treasurer — members they paid
+  // personally, plus their own purchases — so one check can settle it all.
+  const owedToMe = useMemo(
+    () =>
+      isTreasurer
+        ? reimbursements.filter(
+            (r) =>
+              (r.status === "FRONTED" && r.frontedBy?.id === currentUserId) ||
+              ((r.status === "PENDING" || r.status === "APPROVED") && isMine(r))
+          )
+        : [],
+    [reimbursements, isTreasurer, currentUserId, isMine]
+  );
+  const [frontItems, setFrontItems] = useState<Reimbursement[] | null>(null);
+  const [selfCheckOpen, setSelfCheckOpen] = useState(false);
+
+  // Paid rows are settled history; officers can't touch what the treasurer
+  // already paid out. Everything else can be edited — one row or in a batch.
+  const canEdit = useCallback(
+    (r: Reimbursement) =>
+      r.status !== "PAID" &&
+      (isTreasurer || (r.officer.id === currentUserId && r.status !== "FRONTED")),
+    [isTreasurer, currentUserId]
+  );
+  const isOpen = (r: Reimbursement) => r.status === "PENDING" || r.status === "APPROVED";
+
+  // Batch selection. Holds ids, and is read back through the current list so a
+  // row that was deleted or paid elsewhere simply drops out.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selected = useMemo(
+    () => reimbursements.filter((r) => selectedIds.has(r.id) && canEdit(r)),
+    [reimbursements, selectedIds, canEdit]
+  );
+  const selectedTotal = selected.reduce((s, r) => s + r.amount, 0);
+  const selectableVisible = useMemo(() => sorted.filter(canEdit), [sorted, canEdit]);
+  const visibleSelectedCount = selectableVisible.filter((r) => selectedIds.has(r.id)).length;
+  const allVisibleSelected =
+    selectableVisible.length > 0 && visibleSelectedCount === selectableVisible.length;
+
+  function toggleRow(id: string, on: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAllVisible(on: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const r of selectableVisible) {
+        if (on) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  }
+
+  // Selected rows the treasurer can still pay personally (not their own).
+  const frontable = selected.filter((r) => isOpen(r) && !isMine(r));
+
+  async function runBulk(label: string, action: () => Promise<BulkResult>) {
+    try {
+      const res = await action();
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        `${label} ${res.count} ${res.count === 1 ? "reimbursement" : "reimbursements"}` +
+          (res.skipped ? ` · ${res.skipped} skipped (paid or not yours)` : "")
+      );
+      setSelectedIds(new Set());
+      router.refresh();
+    } catch {
+      toast.error("Something went wrong — nothing may have changed. Refresh and try again.");
+    }
+  }
 
   const hasActiveFilters =
     search !== "" ||
@@ -288,7 +430,7 @@ export function ReimbursementManager({
         tags: ((fd.get("tags") as string) || null) as string | null,
         notes: ((fd.get("notes") as string) || null) as string | null,
         status: isTreasurer
-          ? ((fd.get("status") as "PENDING" | "APPROVED" | "PAID") ?? editing.status as "PENDING")
+          ? ((fd.get("status") as ReimbursementStatus | null) ?? editing.status)
           : undefined,
       });
       toast.success("Saved");
@@ -336,7 +478,8 @@ export function ReimbursementManager({
           className="w-full sm:max-w-xs"
         />
         <p className="text-sm text-muted-foreground">
-          {filtered.length} of {reimbursements.length} · Pending {formatCurrency(totals.pending)} · Approved {formatCurrency(totals.approved)} · Paid {formatCurrency(totals.paid)}
+          {filtered.length} of {reimbursements.length} · Pending {formatCurrency(totals.pending)} · Approved {formatCurrency(totals.approved)}
+          {totals.fronted > 0 && <> · Fronted {formatCurrency(totals.fronted)}</>} · Paid {formatCurrency(totals.paid)}
         </p>
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
           {hasActiveFilters && (
@@ -362,10 +505,152 @@ export function ReimbursementManager({
         </div>
       </div>
 
+      {owedToMe.length > 0 && (
+        <OwedToYouBanner
+          items={owedToMe}
+          isMine={isMine}
+          onWriteCheck={() => setSelfCheckOpen(true)}
+        />
+      )}
+
+      {selected.length > 0 && (
+        <div className="surface sticky top-2 z-10 flex flex-wrap items-center gap-2 px-3 py-2">
+          <span className="text-sm font-medium">
+            {selected.length} selected
+            <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">
+              {formatCurrency(selectedTotal)}
+            </span>
+            {selected.length > visibleSelectedCount && (
+              <span className="ml-1.5 font-normal text-warning-fg">
+                · {selected.length - visibleSelectedCount} hidden by filters
+              </span>
+            )}
+          </span>
+          <Button variant="ghost" size="xs" onClick={() => setSelectedIds(new Set())}>
+            <X /> Clear
+          </Button>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            {isTreasurer && frontable.length > 0 && (
+              <Button size="sm" onClick={() => setFrontItems(frontable)}>
+                <HandCoins /> I paid them myself
+              </Button>
+            )}
+            {isTreasurer && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="outline" size="sm">
+                      Status <ChevronDown data-icon="inline-end" className="opacity-70" />
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end">
+                  {(["APPROVED", "PENDING"] as const).map((st) => (
+                    <DropdownMenuItem
+                      key={st}
+                      onClick={() =>
+                        runBulk(
+                          `Marked ${STATUS_LABEL[st].toLowerCase()}:`,
+                          () => bulkUpdateReimbursements(selected.map((r) => r.id), { status: st })
+                        )
+                      }
+                    >
+                      Mark {STATUS_LABEL[st].toLowerCase()}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm">
+                    Category <ChevronDown data-icon="inline-end" className="opacity-70" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
+                {categories.map((c) => (
+                  <DropdownMenuItem
+                    key={c.id}
+                    onClick={() =>
+                      runBulk("Moved to " + c.name + ":", () =>
+                        bulkUpdateReimbursements(selected.map((r) => r.id), { categoryId: c.id })
+                      )
+                    }
+                  >
+                    {c.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm">
+                    Event <ChevronDown data-icon="inline-end" className="opacity-70" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="max-h-72 w-64 overflow-y-auto">
+                <DropdownMenuItem
+                  onClick={() =>
+                    runBulk("Cleared event on", () =>
+                      bulkUpdateReimbursements(selected.map((r) => r.id), { eventId: null })
+                    )
+                  }
+                >
+                  No event
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {events.map((ev) => (
+                  <DropdownMenuItem
+                    key={ev.id}
+                    onClick={() =>
+                      runBulk("Tagged " + ev.name + " on", () =>
+                        bulkUpdateReimbursements(selected.map((r) => r.id), { eventId: ev.id })
+                      )
+                    }
+                  >
+                    <span className="truncate">{ev.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive"
+              onClick={() => {
+                if (
+                  confirm(
+                    `Delete ${selected.length} ${selected.length === 1 ? "reimbursement" : "reimbursements"} (${formatCurrency(selectedTotal)})? This can't be undone.`
+                  )
+                ) {
+                  runBulk("Deleted", () => bulkDeleteReimbursements(selected.map((r) => r.id)));
+                }
+              }}
+            >
+              <Trash2 /> Delete
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="surface overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8 pr-0">
+                {selectableVisible.length > 0 && (
+                  <Checkbox
+                    checked={allVisibleSelected}
+                    indeterminate={visibleSelectedCount > 0 && !allVisibleSelected}
+                    onCheckedChange={(v) => toggleAllVisible(Boolean(v))}
+                    aria-label="Select all shown"
+                  />
+                )}
+              </TableHead>
               <TableHead>Receipt</TableHead>
               {sortHeader("name", "Description")}
               {sortHeader("member", "Member")}
@@ -378,6 +663,7 @@ export function ReimbursementManager({
               <TableHead />
             </TableRow>
             <TableRow className="bg-muted/20 hover:bg-transparent">
+              <TableHead className="h-auto py-1.5" />
               <TableHead className="h-auto py-1.5" />
               <TableHead className="h-auto py-1.5" />
               <TableHead className="h-auto py-1.5">
@@ -473,7 +759,7 @@ export function ReimbursementManager({
                   onChange={(e) => setSinceDate(e.target.value)}
                   aria-label="Show reimbursements on or after this date"
                   title="Show reimbursements on or after this date"
-                  className="h-7 font-normal"
+                  className="h-7 w-32 px-1.5 font-normal"
                 />
               </TableHead>
               <TableHead className="h-auto py-1.5" />
@@ -486,18 +772,16 @@ export function ReimbursementManager({
                     <SelectValue>
                       {statusFilter === "all"
                         ? "All"
-                        : statusFilter === "PENDING"
-                          ? "Pending"
-                          : statusFilter === "APPROVED"
-                            ? "Approved"
-                            : "Paid"}
+                        : STATUS_LABEL[statusFilter]}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All status</SelectItem>
-                    <SelectItem value="PENDING">Pending</SelectItem>
-                    <SelectItem value="APPROVED">Approved</SelectItem>
-                    <SelectItem value="PAID">Paid</SelectItem>
+                    {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </TableHead>
@@ -514,9 +798,20 @@ export function ReimbursementManager({
                   parsed = null;
                 }
               }
-              const canEdit = isTreasurer || r.officer.id === currentUserId;
+              const editable = canEdit(r);
+              const open = isOpen(r);
+              const isSelected = editable && selectedIds.has(r.id);
               return (
-                <TableRow key={r.id}>
+                <TableRow key={r.id} data-state={isSelected ? "selected" : undefined}>
+                  <TableCell className="w-8 pr-0">
+                    {editable && (
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(v) => toggleRow(r.id, Boolean(v))}
+                        aria-label={`Select ${r.name}`}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell>
                     {r.receiptUrl ? (
                       <div className="relative h-12 w-12 overflow-hidden rounded border">
@@ -544,48 +839,109 @@ export function ReimbursementManager({
                   </TableCell>
                   <TableCell>{r.category?.name ?? "—"}</TableCell>
                   <TableCell>{r.event?.name ?? "—"}</TableCell>
-                  <TableCell>{formatDate(r.date)}</TableCell>
+                  <TableCell>
+                    {formatDate(r.date)}
+                    <LoggedAt date={r.createdAt} />
+                  </TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">
                     {formatCurrency(r.amount)}
                   </TableCell>
                   <TableCell>
                     <Badge
                       variant={
-                        r.status === "PAID"
+                        r.status === "PAID" || r.status === "FRONTED"
                           ? "default"
                           : r.status === "APPROVED"
                             ? "secondary"
                             : "outline"
                       }
                     >
-                      {r.status}
+                      {STATUS_LABEL[r.status]}
                     </Badge>
+                    {r.frontedBy && r.status !== "PENDING" && r.status !== "APPROVED" && (
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {r.status === "FRONTED" ? "by" : "Fronted by"}{" "}
+                        {r.frontedBy.id === currentUserId
+                          ? "you"
+                          : r.frontedBy.name?.split(" ")[0] || r.frontedBy.email}
+                        {r.status === "FRONTED" &&
+                          r.frontedMethod &&
+                          ` · ${FRONT_METHODS[r.frontedMethod as FrontMethod] ?? r.frontedMethod}`}
+                      </span>
+                    )}
+                    {r.status === "PAID" && r.check && (
+                      <span className="block text-xs text-muted-foreground tabular-nums">
+                        Check #{r.check.checkNumber}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {canEdit && r.status !== "PAID" && (
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
-                          Edit
-                        </Button>
-                      )}
-                      {isTreasurer && r.status === "APPROVED" && (
-                        <Button size="sm" onClick={() => bundleToCheck(payeeOf(r))}>
-                          Pay via check
-                        </Button>
-                      )}
-                      {canEdit && r.status !== "PAID" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            if (confirm(`Delete "${r.name}"?`)) {
-                              await deleteReimbursement(r.id);
-                              router.refresh();
+                    <div className="flex items-center justify-end gap-0.5">
+                      {isTreasurer && (r.status === "APPROVED" || (open && !isMine(r))) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button size="sm" variant={r.status === "APPROVED" ? "default" : "outline"}>
+                                Pay <ChevronDown data-icon="inline-end" className="opacity-70" />
+                              </Button>
                             }
-                          }}
-                        >
-                          Delete
-                        </Button>
+                          />
+                          <DropdownMenuContent align="end" className="w-60">
+                            {r.status === "APPROVED" && (
+                              <DropdownMenuItem onClick={() => bundleToCheck(payeeOf(r))}>
+                                <Landmark />
+                                Club check to {payeeOf(r)}
+                              </DropdownMenuItem>
+                            )}
+                            {open && !isMine(r) && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setFrontItems(
+                                    reimbursements.filter(
+                                      (x) => payeeOf(x) === payeeOf(r) && isOpen(x)
+                                    )
+                                  )
+                                }
+                              >
+                                <HandCoins />
+                                I paid them myself
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      {editable && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${r.name}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setEditing(r)}>
+                              <Pencil />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={async () => {
+                                if (confirm(`Delete "${r.name}"?`)) {
+                                  try {
+                                    await deleteReimbursement(r.id);
+                                    router.refresh();
+                                  } catch (err) {
+                                    toast.error(err instanceof Error ? err.message : "Failed to delete");
+                                  }
+                                }
+                              }}
+                            >
+                              <Trash2 />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </TableCell>
@@ -594,7 +950,7 @@ export function ReimbursementManager({
             })}
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
                   No reimbursements match the current filters
                 </TableCell>
               </TableRow>
@@ -602,6 +958,23 @@ export function ReimbursementManager({
           </TableBody>
         </Table>
       </div>
+
+      {isTreasurer && (
+        <>
+          <FrontDialog
+            items={frontItems}
+            onClose={() => setFrontItems(null)}
+            onDone={() => setSelectedIds(new Set())}
+          />
+          <SelfCheckDialog
+            open={selfCheckOpen}
+            onOpenChange={setSelfCheckOpen}
+            semesterId={semesterId}
+            items={owedToMe}
+            payee={currentUserName}
+          />
+        </>
+      )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -974,15 +1347,17 @@ function EditReimbursementForm({
           <Select
             name="status"
             defaultValue={defaults.status}
-            items={{ PENDING: "Pending", APPROVED: "Approved", PAID: "Paid" }}
+            items={STATUS_LABEL}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="APPROVED">Approved</SelectItem>
-              <SelectItem value="PAID">Paid</SelectItem>
+              {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -991,5 +1366,342 @@ function EditReimbursementForm({
         Save
       </Button>
     </form>
+  );
+}
+
+/**
+ * The treasurer's running tab with the club: members they paid personally plus
+ * their own purchases, with the one-click way to settle it.
+ */
+function OwedToYouBanner({
+  items,
+  isMine,
+  onWriteCheck,
+}: {
+  items: Reimbursement[];
+  isMine: (r: Reimbursement) => boolean;
+  onWriteCheck: () => void;
+}) {
+  const total = items.reduce((s, r) => s + r.amount, 0);
+  const own = items.filter(isMine).length;
+  const fronted = items.length - own;
+  const parts = [
+    fronted > 0 && `${fronted} you paid for others`,
+    own > 0 && `${own} of your own`,
+  ].filter(Boolean);
+  return (
+    <div className="surface flex flex-wrap items-center gap-3 p-4">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <HandCoins className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">
+          The club owes you <span className="tabular-nums">{formatCurrency(total)}</span>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {parts.join(" · ")} — settle them all with one check to yourself.
+        </p>
+      </div>
+      <Button size="sm" onClick={onWriteCheck}>
+        Write check to myself
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Record that the treasurer paid members personally. Rows are grouped by who
+ * was paid, with a subtotal each — that subtotal is the Venmo to send.
+ */
+function FrontDialog({
+  items,
+  onClose,
+  onDone,
+}: {
+  items: Reimbursement[] | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [method, setMethod] = useState<FrontMethod>("VENMO");
+  const [saving, setSaving] = useState(false);
+  const list = items ?? [];
+  const chosen = list.filter((r) => !excluded.has(r.id));
+  const total = chosen.reduce((s, r) => s + r.amount, 0);
+
+  const groups = useMemo(() => {
+    const byPayee = new Map<string, Reimbursement[]>();
+    for (const r of items ?? []) {
+      const key = payeeOf(r);
+      const g = byPayee.get(key);
+      if (g) g.push(r);
+      else byPayee.set(key, [r]);
+    }
+    return [...byPayee].sort(([a], [b]) => a.localeCompare(b));
+  }, [items]);
+  const single = groups.length === 1 ? groups[0][0] : null;
+
+  function close() {
+    setExcluded(new Set());
+    onClose();
+  }
+
+  function toggle(ids: string[], on: boolean) {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await frontReimbursements(
+        chosen.map((r) => r.id),
+        method
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Recorded — the club now owes you ${formatCurrency(total)} for this`);
+      close();
+      onDone();
+      router.refresh();
+    } catch {
+      toast.error("Failed to record payment");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={items !== null} onOpenChange={(o) => !o && close()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {single ? `Paid ${single} yourself?` : `Paid ${groups.length} people yourself?`}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          This marks them as paid. The club then owes you, and you can settle
+          that later with one check to yourself.
+        </p>
+        <div className="max-h-80 space-y-3 overflow-y-auto rounded-lg border p-2">
+          {groups.map(([payee, rows]) => {
+            const ids = rows.map((r) => r.id);
+            const on = rows.filter((r) => !excluded.has(r.id));
+            return (
+              <div key={payee}>
+                <label className="flex cursor-pointer items-center justify-between gap-2 rounded px-1 py-1 text-sm font-medium hover:bg-muted/50">
+                  <span className="flex items-center gap-2">
+                    <Checkbox
+                      checked={on.length === rows.length}
+                      indeterminate={on.length > 0 && on.length < rows.length}
+                      onCheckedChange={(v) => toggle(ids, Boolean(v))}
+                    />
+                    {payee}
+                  </span>
+                  <span className="tabular-nums">
+                    {formatCurrency(on.reduce((s, r) => s + r.amount, 0))}
+                  </span>
+                </label>
+                {rows.map((r) => (
+                  <label
+                    key={r.id}
+                    className="flex cursor-pointer items-center justify-between gap-2 rounded py-1 pr-1 pl-7 text-sm hover:bg-muted/50"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Checkbox
+                        checked={!excluded.has(r.id)}
+                        onCheckedChange={(v) => toggle([r.id], Boolean(v))}
+                      />
+                      <span className="truncate">{r.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatDate(r.date)}
+                      </span>
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatCurrency(r.amount)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="flex-1 space-y-2">
+            <Label>How you paid</Label>
+            <Select
+              value={method}
+              onValueChange={(v) => v && setMethod(v as FrontMethod)}
+              items={FRONT_METHODS}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(FRONT_METHODS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="pb-2 text-right">
+            <p className="text-xs text-muted-foreground">You paid</p>
+            <p className="font-semibold tabular-nums">{formatCurrency(total)}</p>
+          </div>
+        </div>
+        <Button className="w-full" disabled={!chosen.length || saving} onClick={save}>
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          Mark as paid by me
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * One check from the club to the treasurer covering everything they're owed.
+ * Each reimbursement it pays moves to PAID and keeps its own budget category,
+ * so the check itself adds no new spend.
+ */
+function SelfCheckDialog({
+  open,
+  onOpenChange,
+  semesterId,
+  items,
+  payee,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  semesterId: string;
+  items: Reimbursement[];
+  payee: string;
+}) {
+  const router = useRouter();
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [checkNumber, setCheckNumber] = useState("");
+  const [date, setDate] = useState(todayInput());
+  const [saving, setSaving] = useState(false);
+  const selected = items.filter((r) => !excluded.has(r.id));
+  // Summing floats drifts (0.1 + 0.2); a check is written in whole cents.
+  const total = Math.round(selected.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+
+  function setOpen(o: boolean) {
+    if (!o) {
+      setExcluded(new Set());
+      setCheckNumber("");
+    }
+    onOpenChange(o);
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await createChecks(semesterId, [
+        {
+          checkNumber: checkNumber.trim(),
+          description: `Reimbursement — ${payee} (${selected.length} ${
+            selected.length === 1 ? "item" : "items"
+          })`,
+          amount: total,
+          date,
+          recipientName: payee,
+          paymentMethod: "CHECK",
+          reimbursementIds: selected.map((r) => r.id),
+        },
+      ]);
+      if (!res.ok) {
+        toast.error(res.error.replace(/^Check 1: /, ""));
+        return;
+      }
+      toast.success(`Check #${checkNumber.trim()} logged — ${selected.length} reimbursements paid`);
+      setOpen(false);
+      router.refresh();
+    } catch {
+      toast.error("Failed to create check");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Write check to myself</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={save} className="space-y-4">
+          <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2">
+            {items.map((r) => (
+              <label
+                key={r.id}
+                className="flex cursor-pointer items-center justify-between gap-2 rounded px-1 py-1 text-sm hover:bg-muted/50"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Checkbox
+                    checked={!excluded.has(r.id)}
+                    onCheckedChange={(v) =>
+                      setExcluded((prev) => {
+                        const next = new Set(prev);
+                        if (v) next.delete(r.id);
+                        else next.add(r.id);
+                        return next;
+                      })
+                    }
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate">{r.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {r.status === "FRONTED" ? `Paid ${payeeOf(r)}` : "Your purchase"}
+                    </span>
+                  </span>
+                </span>
+                <span className="tabular-nums">{formatCurrency(r.amount)}</span>
+              </label>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Check #</Label>
+              <Input
+                required
+                value={checkNumber}
+                onChange={(e) => setCheckNumber(e.target.value)}
+                placeholder="e.g. 1042"
+                inputMode="numeric"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex items-baseline justify-between rounded-lg bg-muted/40 px-3 py-2">
+            <span className="text-sm text-muted-foreground">Pay to {payee}</span>
+            <span className="text-lg font-semibold tabular-nums">{formatCurrency(total)}</span>
+          </div>
+          <Button type="submit" className="w-full" disabled={!selected.length || saving}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Log check
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

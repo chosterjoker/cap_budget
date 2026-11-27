@@ -22,9 +22,14 @@ enum PaymentMethod {
   OTHER
 }
 
+// PENDING → APPROVED → PAID is the normal path: the club cuts a check to the
+// member. FRONTED sits before PAID for the treasurer's shortcut: they pay the
+// member out of pocket (Venmo, cash), so the member is whole but the club now
+// owes the treasurer. A later check to the treasurer moves it on to PAID.
 enum ReimbursementStatus {
   PENDING
   APPROVED
+  FRONTED
   PAID
 }
 
@@ -53,6 +58,7 @@ model User {
   accounts       Account[]
   sessions       Session[]
   reimbursements Reimbursement[]
+  frontedReimbursements Reimbursement[] @relation("FrontedReimbursements")
 }
 
 model Account {
@@ -203,9 +209,15 @@ model Reimbursement {
   parsedData  String?
   status      ReimbursementStatus @default(PENDING)
   checkId     String?
+  // Set while status is FRONTED (and kept once the check to them clears it):
+  // the treasurer who paid the member personally, when, and how.
+  frontedById     String?
+  frontedAt       DateTime?
+  frontedMethod   PaymentMethod?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   officer     User                @relation(fields: [officerId], references: [id])
+  frontedBy   User?               @relation("FrontedReimbursements", fields: [frontedById], references: [id])
   category    BudgetCategory?     @relation(fields: [categoryId], references: [id])
   event       Event?              @relation(fields: [eventId], references: [id])
   check       Check?              @relation(fields: [checkId], references: [id])

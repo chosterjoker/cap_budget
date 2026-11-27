@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoggedAt } from "@/components/common/logged-at";
 import { formatCurrency, formatDate, toDateInput, todayInput } from "@/lib/format";
 import { createDeposit, updateDeposit, deleteDeposit } from "@/actions/deposits";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ type Deposit = {
   id: string;
   amount: number;
   date: Date;
+  createdAt: Date;
   notes: string | null;
 };
 
@@ -156,7 +158,10 @@ export function DepositTracker({
           <TableBody>
             {deposits.map((d) => (
               <TableRow key={d.id}>
-                <TableCell>{formatDate(d.date)}</TableCell>
+                <TableCell>
+                  {formatDate(d.date)}
+                  <LoggedAt date={d.createdAt} />
+                </TableCell>
                 <TableCell>{d.notes || "—"}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatCurrency(d.amount)}
